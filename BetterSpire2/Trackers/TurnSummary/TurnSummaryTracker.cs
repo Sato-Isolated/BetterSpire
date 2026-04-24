@@ -34,17 +34,11 @@ public static partial class TurnSummaryTracker
 		Combat
 	}
 
-	private enum TimelineEntryKind
+	private enum SupplementalStatKind
 	{
-		Generic,
 		BlockLost,
-		BlockCleared
-	}
-
-	private enum Tab
-	{
-		Stats,
-		Log
+		BlockCleared,
+		EnergyGained
 	}
 
 	private sealed class PlayedCardSummary
@@ -58,25 +52,19 @@ public static partial class TurnSummaryTracker
 		public int BlockGained { get; set; }
 	}
 
-	private sealed class TurnTimelineEntry
+	private sealed class SupplementalStatEntry
 	{
-		public TurnTimelineEntry(long order, int roundNumber, Creature owner, string text, Color color, TimelineEntryKind kind = TimelineEntryKind.Generic, int amount = 0)
+		public SupplementalStatEntry(int roundNumber, Creature owner, SupplementalStatKind kind, int amount)
 		{
-			Order = order;
 			RoundNumber = roundNumber;
 			Owner = owner;
-			Text = text;
-			Color = color;
 			Kind = kind;
 			Amount = amount;
 		}
 
-		public long Order { get; }
 		public int RoundNumber { get; }
 		public Creature Owner { get; }
-		public string Text { get; }
-		public Color Color { get; }
-		public TimelineEntryKind Kind { get; }
+		public SupplementalStatKind Kind { get; }
 		public int Amount { get; }
 	}
 
@@ -95,7 +83,13 @@ public static partial class TurnSummaryTracker
 		public Creature Creature { get; }
 		public string DisplayName { get; }
 		public bool IsLocal { get; }
+		public int CardsDrawn { get; set; }
 		public int CardsPlayed { get; set; }
+		public int CardsDiscarded { get; set; }
+		public int CardsGenerated { get; set; }
+		public int CardsExhausted { get; set; }
+		public int EnergySpent { get; set; }
+		public int EnergyGained { get; set; }
 		public int DamageDealtTotal { get; set; }
 		public int DamageDealtHp { get; set; }
 		public int DamageDealtBlocked { get; set; }
@@ -109,6 +103,7 @@ public static partial class TurnSummaryTracker
 		public int BlockBreaks { get; set; }
 		public List<PlayedCardSummary> Cards { get; } = new();
 		public IEnumerable<KeyValuePair<string, int>> BlockSources => _blockSources.OrderByDescending(p => p.Value).ThenBy(p => p.Key, StringComparer.Ordinal);
+		public int EnergyNet => EnergyGained - EnergySpent;
 		public int TotalBlockLost => BlockSpent + BlockLost + BlockCleared;
 
 		public void RegisterPlayedCard(CardModel card)
@@ -192,12 +187,9 @@ public static partial class TurnSummaryTracker
 	private const float CardThumbWidth = 52f;
 	private const float CardThumbPortraitHeight = 38f;
 
-	private static readonly Color _tabActiveBg = new(0.20f, 0.17f, 0.08f, 0.92f);
-	private static readonly Color _tabActiveBorder = new(0.86f, 0.74f, 0.34f);
-	private static readonly Color _tabInactiveBg = new(0.08f, 0.09f, 0.12f, 0.85f);
-	private static readonly Color _tabInactiveBorder = new(0.24f, 0.26f, 0.32f);
-
-	private static readonly List<TurnTimelineEntry> _timelineEntries = new();
+	private static readonly List<SupplementalStatEntry> _supplementalEntries = new();
+	private static readonly HashSet<Creature> _expandedCardSections = new();
+	private static readonly List<Control> _interactiveControls = new();
 
 	private static CanvasLayer? _canvasLayer;
 	private static PanelContainer? _panel;
@@ -208,8 +200,6 @@ public static partial class TurnSummaryTracker
 	private static Button? _scopeButton;
 	private static Button? _nextRoundButton;
 	private static Button? _collapseButton;
-	private static Button? _statsTabButton;
-	private static Button? _logTabButton;
 	private static Label? _gripLabel;
 
 	private static bool _visible;
@@ -219,10 +209,7 @@ public static partial class TurnSummaryTracker
 	private static Vector2 _dragOffset;
 	private static int _trackedRound;
 	private static int _selectedRound;
-	private static int _processedHistoryCount;
-	private static long _timelineSequence;
-	private static HistoryViewMode _viewMode = HistoryViewMode.Round;
-	private static Tab _activeTab = Tab.Stats;
+	private static HistoryViewMode _viewMode = HistoryViewMode.Combat;
 	private static CombatManager? _subscribedManager;
 	private static CombatHistory? _subscribedHistory;
 
@@ -235,8 +222,7 @@ public static partial class TurnSummaryTracker
 			ResetCombatTracking();
 			_trackedRound = state?.RoundNumber ?? 0;
 			_selectedRound = _trackedRound;
-			_viewMode = HistoryViewMode.Round;
-			_activeTab = Tab.Stats;
+			_viewMode = HistoryViewMode.Combat;
 			SyncVisibility();
 		}
 		catch (Exception ex)
@@ -297,6 +283,18 @@ public static partial class TurnSummaryTracker
 
 	public static bool ShouldTrackBlockChanges(Creature? creature)
 	{
+		return ShouldTrackSupplementalStat(creature);
+	}
+
+	public static void RecordEnergyGained(Creature creature, int amount)
+	{
+		if (amount <= 0 || !ShouldTrackSupplementalStat(creature)) return;
+		AppendSupplementalStat(creature, GetCurrentRoundNumber(), SupplementalStatKind.EnergyGained, amount);
+		RefreshIfVisible();
+	}
+
+	private static bool ShouldTrackSupplementalStat(Creature? creature)
+	{
 		if (!ModSettings.ShowTurnSummary || creature == null) return false;
 		return CombatManager.Instance?.DebugOnlyGetState() != null && IsTrackedPlayerCreature(creature);
 	}
@@ -310,15 +308,49 @@ public static partial class TurnSummaryTracker
 	public static void RecordBlockLost(Creature creature, int amount)
 	{
 		if (amount <= 0 || !ShouldTrackBlockChanges(creature)) return;
-		AppendTimeline(creature, GetCurrentRoundNumber(), $"Lost {amount} block", _blockLossColor, TimelineEntryKind.BlockLost, amount);
+		AppendSupplementalStat(creature, GetCurrentRoundNumber(), SupplementalStatKind.BlockLost, amount);
 		RefreshIfVisible();
 	}
 
 	public static void RecordBlockCleared(Creature creature, int amount)
 	{
 		if (amount <= 0 || !ShouldTrackBlockChanges(creature)) return;
-		AppendTimeline(creature, GetCurrentRoundNumber(), $"Cleared {amount} block", _blockLossColor, TimelineEntryKind.BlockCleared, amount);
+		AppendSupplementalStat(creature, GetCurrentRoundNumber(), SupplementalStatKind.BlockCleared, amount);
 		RefreshIfVisible();
+	}
+
+	private static bool IsCardSectionExpanded(Creature creature)
+	{
+		return _expandedCardSections.Contains(creature);
+	}
+
+	private static void ToggleCardSection(Creature creature)
+	{
+		if (!_expandedCardSections.Add(creature))
+		{
+			_expandedCardSections.Remove(creature);
+		}
+
+		Refresh();
+	}
+
+	private static void RegisterInteractiveControl(Control control)
+	{
+		if (!_interactiveControls.Contains(control))
+		{
+			_interactiveControls.Add(control);
+		}
+	}
+
+	private static void PruneInteractiveControls()
+	{
+		for (int index = _interactiveControls.Count - 1; index >= 0; index--)
+		{
+			if (!UiHelpers.IsValid(_interactiveControls[index]))
+			{
+				_interactiveControls.RemoveAt(index);
+			}
+		}
 	}
 
 	public static void Hide()
@@ -329,8 +361,7 @@ public static partial class TurnSummaryTracker
 		ResetCombatTracking();
 		_trackedRound = 0;
 		_selectedRound = 0;
-		_viewMode = HistoryViewMode.Round;
-		_activeTab = Tab.Stats;
+		_viewMode = HistoryViewMode.Combat;
 		_dragging = false;
 		_resizing = false;
 		_visible = false;
@@ -352,7 +383,6 @@ public static partial class TurnSummaryTracker
 			_subscribedHistory.Changed -= OnHistoryChanged;
 			_subscribedHistory.Changed += OnHistoryChanged;
 		}
-		_processedHistoryCount = 0;
 	}
 
 	private static void DetachSubscriptions()
@@ -418,7 +448,6 @@ public static partial class TurnSummaryTracker
 			if (_trackedRound <= 0) _trackedRound = state.RoundNumber;
 			if (_selectedRound <= 0) _selectedRound = _trackedRound;
 			EnsureSubscriptions(manager);
-			ProcessPendingHistoryEntries(manager.History);
 			EnsureUi();
 			RenderContent(BuildSummaries(state, manager.History));
 		}
@@ -432,8 +461,7 @@ public static partial class TurnSummaryTracker
 	{
 		if (_visible && UiHelpers.IsValid(_panel) && UiHelpers.IsValid(_contentContainer)
 			&& UiHelpers.IsValid(_titleLabel) && UiHelpers.IsValid(_collapseButton)
-			&& UiHelpers.IsValid(_scrollContainer) && UiHelpers.IsValid(_statsTabButton)
-			&& UiHelpers.IsValid(_logTabButton))
+			&& UiHelpers.IsValid(_scrollContainer))
 		{
 			return;
 		}

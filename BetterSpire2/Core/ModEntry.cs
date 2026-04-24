@@ -13,7 +13,7 @@ public class ModEntry
 
 	private static bool _initialized;
 
-	private static readonly Type[] _combatPatches = new Type[10]
+	private static readonly Type[] _combatPatches = new Type[11]
 	{
 		typeof(NCreature_RefreshIntents_Patch),
 		typeof(CombatManager_SetReadyToEndTurn_Patch),
@@ -24,7 +24,8 @@ public class ModEntry
 		typeof(CombatManager_LoseCombat_Patch),
 		typeof(Creature_DamageBlockInternal_Patch),
 		typeof(Creature_LoseBlockInternal_Patch),
-		typeof(Creature_ClearBlock_Patch)
+		typeof(Creature_ClearBlock_Patch),
+		typeof(PlayerCombatState_GainEnergy_Patch)
 	};
 
 	private static readonly Type[] _uiPatches = new Type[3]

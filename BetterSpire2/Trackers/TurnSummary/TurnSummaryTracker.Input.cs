@@ -11,10 +11,11 @@ public static partial class TurnSummaryTracker
 	{
 		Vector2 mousePosition = inputEvent.Position;
 		Rect2 panelRect = _panel!.GetGlobalRect();
+		Rect2 resizeRect = GetResizeHandleRect(panelRect);
 
 		if (inputEvent.Pressed)
 		{
-			if (!panelRect.HasPoint(mousePosition) || IsPointInInteractiveControl(mousePosition))
+			if ((!panelRect.HasPoint(mousePosition) && !resizeRect.HasPoint(mousePosition)) || IsPointInInteractiveControl(mousePosition))
 			{
 				return;
 			}
@@ -42,12 +43,17 @@ public static partial class TurnSummaryTracker
 
 	private static bool IsPointInInteractiveControl(Vector2 point)
 	{
-		return IsPointInControl(_collapseButton, point)
-			|| IsPointInControl(_prevRoundButton, point)
-			|| IsPointInControl(_scopeButton, point)
-			|| IsPointInControl(_nextRoundButton, point)
-			|| IsPointInControl(_statsTabButton, point)
-			|| IsPointInControl(_logTabButton, point);
+		PruneInteractiveControls();
+
+		foreach (Control control in _interactiveControls)
+		{
+			if (IsPointInControl(control, point))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private static bool IsPointInControl(Control? control, Vector2 point)
@@ -76,7 +82,7 @@ public static partial class TurnSummaryTracker
 			size.Y = Math.Max(MinPanelHeight, mousePosition.Y - position.Y);
 		}
 		size = ClampPanelSize(size);
-		_panel.CustomMinimumSize = new Vector2(MinPanelWidth, MinPanelHeight);
+		_panel.CustomMinimumSize = size;
 		_panel.Size = size;
 		UpdateGripPosition();
 		Refresh();
@@ -84,7 +90,7 @@ public static partial class TurnSummaryTracker
 
 	private static void UpdateResizeCursor(Vector2 mousePos, Rect2 rect)
 	{
-		if (!rect.HasPoint(mousePos))
+		if (!GetResizeHandleRect(rect).HasPoint(mousePos))
 		{
 			_panel!.MouseDefaultCursorShape = Control.CursorShape.Arrow;
 			return;
@@ -100,26 +106,17 @@ public static partial class TurnSummaryTracker
 		};
 	}
 
+	private static Rect2 GetResizeHandleRect(Rect2 rect)
+	{
+		return new Rect2(rect.Position, rect.Size + new Vector2(ResizeMargin, ResizeMargin));
+	}
+
 	private static void UpdateGripPosition()
 	{
 		if (!UiHelpers.IsValid(_gripLabel) || !UiHelpers.IsValid(_panel)) return;
 		Vector2 pos = _panel!.Position;
 		Vector2 sz = _panel.Size;
 		_gripLabel!.Position = new Vector2(pos.X + sz.X - 16f, pos.Y + sz.Y - 18f);
-	}
-
-	private static void SwitchToStats()
-	{
-		if (_activeTab == Tab.Stats) return;
-		_activeTab = Tab.Stats;
-		Refresh();
-	}
-
-	private static void SwitchToLog()
-	{
-		if (_activeTab == Tab.Log) return;
-		_activeTab = Tab.Log;
-		Refresh();
 	}
 
 	private static void PrevRound()
@@ -177,9 +174,8 @@ public static partial class TurnSummaryTracker
 		_scopeButton = null;
 		_nextRoundButton = null;
 		_collapseButton = null;
-		_statsTabButton = null;
-		_logTabButton = null;
 		_gripLabel = null;
+		_interactiveControls.Clear();
 	}
 
 	private static void ClearContainer(Container container)

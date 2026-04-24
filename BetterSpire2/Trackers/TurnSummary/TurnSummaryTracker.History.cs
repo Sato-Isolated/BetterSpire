@@ -30,9 +30,29 @@ public static partial class TurnSummaryTracker
 
 			switch (entry)
 			{
+				case CardDrawnEntry cde when summaries.TryGetValue(cde.Actor, out PlayerTurnSummary? drawSummary):
+					drawSummary.CardsDrawn++;
+					break;
+
 				case CardPlayFinishedEntry cpf when summaries.TryGetValue(cpf.Actor, out PlayerTurnSummary? cardSummary):
 					cardSummary.CardsPlayed++;
 					cardSummary.RegisterPlayedCard(cpf.CardPlay.Card);
+					break;
+
+				case CardDiscardedEntry cde when summaries.TryGetValue(cde.Actor, out PlayerTurnSummary? discardSummary):
+					discardSummary.CardsDiscarded++;
+					break;
+
+				case CardGeneratedEntry cge when summaries.TryGetValue(cge.Actor, out PlayerTurnSummary? generatedSummary):
+					generatedSummary.CardsGenerated++;
+					break;
+
+				case CardExhaustedEntry cee when summaries.TryGetValue(cee.Actor, out PlayerTurnSummary? exhaustedSummary):
+					exhaustedSummary.CardsExhausted++;
+					break;
+
+				case EnergySpentEntry ese when summaries.TryGetValue(ese.Actor, out PlayerTurnSummary? energySummary):
+					energySummary.EnergySpent += ese.Amount;
 					break;
 
 				case DamageReceivedEntry dre:
@@ -63,7 +83,7 @@ public static partial class TurnSummaryTracker
 			}
 		}
 
-		foreach (TurnTimelineEntry entry in _timelineEntries)
+		foreach (SupplementalStatEntry entry in _supplementalEntries)
 		{
 			if (!IsRoundIncluded(entry.RoundNumber) || !summaries.TryGetValue(entry.Owner, out PlayerTurnSummary? summary))
 			{
@@ -72,11 +92,14 @@ public static partial class TurnSummaryTracker
 
 			switch (entry.Kind)
 			{
-				case TimelineEntryKind.BlockLost:
+				case SupplementalStatKind.BlockLost:
 					summary.BlockLost += entry.Amount;
 					break;
-				case TimelineEntryKind.BlockCleared:
+				case SupplementalStatKind.BlockCleared:
 					summary.BlockCleared += entry.Amount;
+					break;
+				case SupplementalStatKind.EnergyGained:
+					summary.EnergyGained += entry.Amount;
 					break;
 			}
 		}
@@ -84,64 +107,10 @@ public static partial class TurnSummaryTracker
 		return summaries.Values.OrderByDescending(s => s.IsLocal).ThenBy(s => s.DisplayName, StringComparer.Ordinal).ToList();
 	}
 
-	private static void ProcessPendingHistoryEntries(CombatHistory history)
-	{
-		if (_processedHistoryCount < 0)
-		{
-			_processedHistoryCount = 0;
-		}
-
-		int index = 0;
-		foreach (CombatHistoryEntry entry in history.Entries)
-		{
-			if (index++ < _processedHistoryCount)
-			{
-				continue;
-			}
-
-			AppendTimelineFromHistory(entry);
-		}
-		_processedHistoryCount = index;
-	}
-
-	private static void AppendTimelineFromHistory(CombatHistoryEntry entry)
-	{
-		switch (entry)
-		{
-			case CardPlayFinishedEntry cpf when IsTrackedPlayerCreature(cpf.Actor):
-				AppendTimeline(cpf.Actor, entry.RoundNumber, $"Played {GetCardName(cpf.CardPlay.Card)}", _cardsColor);
-				break;
-
-			case DamageReceivedEntry dre:
-				if (dre.Dealer != null && IsTrackedPlayerCreature(dre.Dealer))
-				{
-					AppendTimeline(dre.Dealer, entry.RoundNumber, $"Hit {GetCreatureName(dre.Receiver)} for {FormatDamageBreakdown(dre.Result)}", _dealColor);
-				}
-				if (IsTrackedPlayerCreature(dre.Receiver))
-				{
-					AppendTimeline(dre.Receiver, entry.RoundNumber, $"Took {FormatDamageBreakdown(dre.Result)} from {GetCreatureName(dre.Dealer)}", _takeColor);
-					if (dre.Result.WasBlockBroken)
-					{
-						AppendTimeline(dre.Receiver, entry.RoundNumber, "Block broken", _breakColor);
-					}
-				}
-				break;
-
-			case BlockGainedEntry bge when IsTrackedPlayerCreature(bge.Receiver):
-				AppendTimeline(bge.Receiver, entry.RoundNumber, $"Gained {bge.Amount} block from {DescribeBlockSource(bge.CardPlay, bge.Props)}", _blockGainColor);
-				break;
-		}
-	}
-
-	private static void AppendTimeline(Creature creature, int roundNumber, string text, Godot.Color color, TimelineEntryKind kind = TimelineEntryKind.Generic, int amount = 0)
+	private static void AppendSupplementalStat(Creature creature, int roundNumber, SupplementalStatKind kind, int amount)
 	{
 		if (!IsTrackedPlayerCreature(creature)) return;
-		_timelineEntries.Add(new TurnTimelineEntry(++_timelineSequence, Math.Max(1, roundNumber), creature, text, color, kind, amount));
-	}
-
-	private static List<TurnTimelineEntry> GetTimelineFor(Creature creature)
-	{
-		return _timelineEntries.Where(e => ReferenceEquals(e.Owner, creature) && IsRoundIncluded(e.RoundNumber)).OrderBy(e => e.Order).ToList();
+		_supplementalEntries.Add(new SupplementalStatEntry(Math.Max(1, roundNumber), creature, kind, amount));
 	}
 
 	private static ulong GetLocalNetId()
@@ -236,9 +205,8 @@ public static partial class TurnSummaryTracker
 
 	private static void ResetCombatTracking()
 	{
-		_timelineEntries.Clear();
-		_processedHistoryCount = 0;
-		_timelineSequence = 0;
+		_supplementalEntries.Clear();
+		_expandedCardSections.Clear();
 	}
 
 	private static bool IsTrackedPlayerCreature(Creature creature)

@@ -39,33 +39,28 @@ public static partial class TurnSummaryTracker
 		_titleLabel.CustomMinimumSize = new Vector2(60f, 0f);
 		titleBar.AddChild(_titleLabel, forceReadableName: false, Node.InternalMode.Disabled);
 
-		_statsTabButton = CreateTabButton("Stats", _activeTab == Tab.Stats);
-		_statsTabButton.Pressed += SwitchToStats;
-		titleBar.AddChild(_statsTabButton, forceReadableName: false, Node.InternalMode.Disabled);
-
-		_logTabButton = CreateTabButton("Log", _activeTab == Tab.Log);
-		_logTabButton.Pressed += SwitchToLog;
-		titleBar.AddChild(_logTabButton, forceReadableName: false, Node.InternalMode.Disabled);
-
 		Control spacer = new();
 		spacer.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		titleBar.AddChild(spacer, forceReadableName: false, Node.InternalMode.Disabled);
 
 		_prevRoundButton = CreateNavButton("\u25C0");
 		_prevRoundButton.Pressed += PrevRound;
+		RegisterInteractiveControl(_prevRoundButton);
 		titleBar.AddChild(_prevRoundButton, forceReadableName: false, Node.InternalMode.Disabled);
 
-		_scopeButton = CreateNavButton("All");
-		_scopeButton.CustomMinimumSize = new Vector2(32f, 22f);
+		_scopeButton = CreateNavButton("All", 32f);
 		_scopeButton.Pressed += ToggleViewMode;
+		RegisterInteractiveControl(_scopeButton);
 		titleBar.AddChild(_scopeButton, forceReadableName: false, Node.InternalMode.Disabled);
 
 		_nextRoundButton = CreateNavButton("\u25B6");
 		_nextRoundButton.Pressed += NextRound;
+		RegisterInteractiveControl(_nextRoundButton);
 		titleBar.AddChild(_nextRoundButton, forceReadableName: false, Node.InternalMode.Disabled);
 
-		_collapseButton = CreateNavButton(ModSettings.TurnSummaryCollapsed ? "+" : "\u2212");
+		_collapseButton = CreateNavButton(GetModeToggleText(), 58f);
 		_collapseButton.Pressed += ToggleCollapsed;
+		RegisterInteractiveControl(_collapseButton);
 		titleBar.AddChild(_collapseButton, forceReadableName: false, Node.InternalMode.Disabled);
 
 		_scrollContainer = new ScrollContainer();
@@ -94,41 +89,25 @@ public static partial class TurnSummaryTracker
 		_visible = true;
 	}
 
-	private static Button CreateTabButton(string text, bool active)
+	private static Button CreateNavButton(string text, float width = 22f)
 	{
 		Button button = new();
 		button.Text = text;
-		button.CustomMinimumSize = new Vector2(40f, 20f);
-		button.AddThemeFontSizeOverride("font_size", 11);
-		ApplyTabStyle(button, active);
-		return button;
-	}
-
-	private static void ApplyTabStyle(Button button, bool active)
-	{
-		Color bg = active ? _tabActiveBg : _tabInactiveBg;
-		Color border = active ? _tabActiveBorder : _tabInactiveBorder;
-		Color text = active ? _titleColor : _mutedColor;
-		button.AddThemeColorOverride("font_color", text);
-		button.AddThemeStyleboxOverride("normal", UiHelpers.CreatePanelStyle(bg, border, 1, 3, 3f));
-		button.AddThemeStyleboxOverride("hover", UiHelpers.CreatePanelStyle(bg, _titleColor, 1, 3, 3f));
-		button.AddThemeStyleboxOverride("pressed", UiHelpers.CreatePanelStyle(bg, _titleColor, 1, 3, 3f));
-	}
-
-	private static Button CreateNavButton(string text)
-	{
-		Button button = new();
-		button.Text = text;
-		button.CustomMinimumSize = new Vector2(22f, 22f);
+		button.CustomMinimumSize = new Vector2(width, 22f);
 		button.AddThemeColorOverride("font_color", _mutedColor);
 		button.AddThemeColorOverride("font_disabled_color", new Color(_mutedColor, 0.35f));
-		button.AddThemeFontSizeOverride("font_size", 11);
+		button.AddThemeFontSizeOverride("font_size", width > 32f ? 10 : 11);
 		Color navBg = new(0.08f, 0.09f, 0.12f, 0.8f);
 		Color navBorder = new(0.22f, 0.24f, 0.30f);
 		button.AddThemeStyleboxOverride("normal", UiHelpers.CreatePanelStyle(navBg, navBorder, 1, 3, 2f));
 		button.AddThemeStyleboxOverride("hover", UiHelpers.CreatePanelStyle(navBg, _mutedColor, 1, 3, 2f));
 		button.AddThemeStyleboxOverride("pressed", UiHelpers.CreatePanelStyle(navBg, _mutedColor, 1, 3, 2f));
 		return button;
+	}
+
+	private static string GetModeToggleText()
+	{
+		return ModSettings.TurnSummaryCollapsed ? "Detail" : "Compact";
 	}
 
 	private static Vector2 ClampPanelSize(Vector2 size)
