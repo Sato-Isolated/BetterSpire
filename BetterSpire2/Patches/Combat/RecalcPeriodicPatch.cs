@@ -11,17 +11,7 @@ namespace BetterSpire2.Patches.Combat;
 [HarmonyPatch(typeof(NIntent), nameof(NIntent._Process))]
 internal static class NIntent_Process_Patch
 {
-	[HarmonyPrepare]
-	private static bool Prepare(MethodBase original)
-	{
-		if (original is not null)
-		{
-			return true;
-		}
-
-		ModLog.Info($"Target method not found for {nameof(NIntent_Process_Patch)} - patch skipped.");
-		return false;
-	}
+	
 
 	[HarmonyPostfix]
 	private static void Postfix()

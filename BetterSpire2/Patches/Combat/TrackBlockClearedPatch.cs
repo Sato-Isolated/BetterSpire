@@ -11,17 +11,7 @@ namespace BetterSpire2.Patches.Combat;
 [HarmonyPatch(typeof(Creature), "ClearBlock", new Type[] { })]
 internal static class Creature_ClearBlock_Patch
 {
-	[HarmonyPrepare]
-	private static bool Prepare(MethodBase original)
-	{
-		if (original is not null)
-		{
-			return true;
-		}
-
-		ModLog.Info($"Target method not found for {nameof(Creature_ClearBlock_Patch)} - patch skipped.");
-		return false;
-	}
+	
 
 	[HarmonyPrefix]
 	private static void Prefix(Creature __instance, ref int __state)

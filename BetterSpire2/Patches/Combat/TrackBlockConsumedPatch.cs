@@ -11,17 +11,7 @@ namespace BetterSpire2.Patches.Combat;
 /// </summary>
 internal static class Creature_DamageBlockInternal_Patch
 {
-	[HarmonyPrepare]
-	private static bool Prepare(MethodBase original)
-	{
-		if (original is not null)
-		{
-			return true;
-		}
-
-		ModLog.Info($"Target method not found for {nameof(Creature_DamageBlockInternal_Patch)} - patch skipped.");
-		return false;
-	}
+	
 
 	[HarmonyPostfix]
 	private static void Postfix(Creature __instance, decimal __result)

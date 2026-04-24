@@ -1,6 +1,5 @@
 #nullable enable
 using System;
-using System.Reflection;
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Nodes;
@@ -13,17 +12,7 @@ namespace BetterSpire2.Patches.Input;
 [HarmonyPatch(typeof(NGame), nameof(NGame._Input))]
 internal static class NGame_Input_Patch
 {
-	[HarmonyPrepare]
-	private static bool Prepare(MethodBase original)
-	{
-		if (original is not null)
-		{
-			return true;
-		}
-
-		ModLog.Info($"Target method not found for {nameof(NGame_Input_Patch)} - patch skipped.");
-		return false;
-	}
+	
 
 	[HarmonyPostfix]
 	private static void Postfix(InputEvent inputEvent)

@@ -1,4 +1,3 @@
-using System.Reflection;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Nodes;
 
@@ -10,17 +9,7 @@ namespace BetterSpire2.Patches.UI;
 [HarmonyPatch(typeof(NGame), "LaunchMainMenu")]
 internal static class NGame_LaunchMainMenu_Patch
 {
-	[HarmonyPrepare]
-	private static bool Prepare(MethodBase original)
-	{
-		if (original is not null)
-		{
-			return true;
-		}
-
-		ModLog.Info($"Target method not found for {nameof(NGame_LaunchMainMenu_Patch)} - patch skipped.");
-		return false;
-	}
+	
 
 	[HarmonyPrefix]
 	private static void Prefix(ref bool skipLogo)
