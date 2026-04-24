@@ -1,25 +1,31 @@
 #nullable enable
 using System;
+using System.Reflection;
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Nodes;
 
 namespace BetterSpire2.Patches.Input;
 
-[HarmonyPatch(typeof(NGame), "_Input")]
-public class InputPatch
+/// <summary>
+/// Wires BetterSpire hotkeys and overlay input into the game's global input loop.
+/// </summary>
+[HarmonyPatch(typeof(NGame), nameof(NGame._Input))]
+internal static class NGame_Input_Patch
 {
-	private static void Prefix(InputEvent inputEvent)
+	[HarmonyPrepare]
+	private static bool Prepare(MethodBase original)
 	{
-		try
+		if (original is not null)
 		{
+			return true;
 		}
-		catch (Exception ex)
-		{
-			ModLog.Error("InputPatch.Prefix", ex);
-		}
+
+		ModLog.Info($"Target method not found for {nameof(NGame_Input_Patch)} - patch skipped.");
+		return false;
 	}
 
+	[HarmonyPostfix]
 	private static void Postfix(InputEvent inputEvent)
 	{
 		try
@@ -67,7 +73,7 @@ public class InputPatch
 		}
 		catch (Exception ex)
 		{
-			ModLog.Error("InputPatch", ex);
+			ModLog.Error(nameof(NGame_Input_Patch), ex);
 		}
 	}
 }

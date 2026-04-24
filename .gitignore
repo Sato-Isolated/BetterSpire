@@ -1,0 +1,8 @@
+bin/
+obj/
+.vs/
+*.user
+*.rsuser
+*.suo
+.github/
+.serena/

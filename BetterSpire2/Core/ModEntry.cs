@@ -1,10 +1,8 @@
 #nullable enable
 using System;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Modding;
-using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 
 namespace BetterSpire2.Core;
 
@@ -17,24 +15,29 @@ public class ModEntry
 
 	private static readonly Type[] _combatPatches = new Type[10]
 	{
-		typeof(RecalcOnRefreshIntentsPatch),
-		typeof(RecalcOnEndTurnPatch),
-		typeof(RecalcPeriodicPatch),
-		typeof(CombatSetUpPatch),
-		typeof(HideOnResetPatch),
-		typeof(HideOnWinPatch),
-		typeof(HideOnLosePatch),
-		typeof(TrackBlockConsumedPatch),
-		typeof(TrackBlockLostPatch),
-		typeof(TrackBlockClearedPatch)
+		typeof(NCreature_RefreshIntents_Patch),
+		typeof(CombatManager_SetReadyToEndTurn_Patch),
+		typeof(NIntent_Process_Patch),
+		typeof(CombatManager_SetUpCombat_Patch),
+		typeof(CombatManager_Reset_Patch),
+		typeof(CombatManager_EndCombatInternal_Patch),
+		typeof(CombatManager_LoseCombat_Patch),
+		typeof(Creature_DamageBlockInternal_Patch),
+		typeof(Creature_LoseBlockInternal_Patch),
+		typeof(Creature_ClearBlock_Patch)
 	};
 
-	private static readonly Type[] _uiPatches = new Type[4]
+	private static readonly Type[] _uiPatches = new Type[3]
 	{
-		typeof(IntentLabelPatch),
-		typeof(SkipSplashPatch),
-		typeof(RestoreInstantFastModePatch),
-		typeof(InputPatch)
+		typeof(NIntent_UpdateVisuals_Patch),
+		typeof(NGame_LaunchMainMenu_Patch),
+		typeof(NGame_Input_Patch)
+	};
+
+	private static readonly Type[] _mapPatches = new Type[2]
+	{
+		typeof(NMapDrawings_HandleDrawingMessage_Patch),
+		typeof(NMapDrawings_HandleClearMapDrawingsMessage_Patch)
 	};
 
 	public static void Init()
@@ -73,7 +76,7 @@ public class ModEntry
 		int failed = 0;
 		PatchGroup(harmony, "Combat", _combatPatches, ref succeeded, ref failed);
 		PatchGroup(harmony, "UI", _uiPatches, ref succeeded, ref failed);
-		PatchDrawingMethods(harmony, ref succeeded, ref failed);
+		PatchGroup(harmony, "Map", _mapPatches, ref succeeded, ref failed);
 		ModLog.Info($"Harmony patching complete: {succeeded} succeeded, {failed} failed");
 		ModLog.Info("ModEntry.Init() complete");
 		if (ModSettings.ShowClock)
@@ -102,37 +105,6 @@ public class ModEntry
 		catch (Exception ex)
 		{
 			ModLog.Error("Patch " + patchClass.Name, ex);
-			failed++;
-		}
-	}
-
-	private static void PatchDrawingMethods(Harmony harmony, ref int succeeded, ref int failed)
-	{
-		ModLog.Info("Patching Map...");
-		PatchMethod(harmony, "HandleDrawingMessage", typeof(MuteDrawingsPatch), "MuteDrawingsPatch", ref succeeded, ref failed);
-		PatchMethod(harmony, "HandleClearMapDrawingsMessage", typeof(MuteClearDrawingsPatch), "MuteClearDrawingsPatch", ref succeeded, ref failed);
-	}
-
-	private static void PatchMethod(Harmony harmony, string methodName, Type patchType, string patchName, ref int succeeded, ref int failed)
-	{
-		try
-		{
-			MethodInfo? targetMethod = AccessTools.Method(typeof(NMapDrawings), methodName);
-			if (targetMethod == null)
-			{
-				ModLog.Info("  Skipped: " + patchName + " — method not found");
-				failed++;
-				return;
-			}
-
-			HarmonyMethod prefix = new HarmonyMethod(patchType, "Prefix");
-			harmony.Patch(targetMethod, prefix);
-			ModLog.Info("  Patched: " + patchName + " (manual)");
-			succeeded++;
-		}
-		catch (Exception ex)
-		{
-			ModLog.Error("Patch " + patchName + " (manual)", ex);
 			failed++;
 		}
 	}

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using HarmonyLib;
 using MegaCrit.Sts2.addons.mega_text;
 using MegaCrit.Sts2.Core.Entities.Creatures;
@@ -8,9 +9,25 @@ using MegaCrit.Sts2.Core.Nodes.Combat;
 
 namespace BetterSpire2.Patches.UI;
 
+/// <summary>
+/// Adds total multi-hit damage next to enemy intent values for easier threat reading.
+/// </summary>
 [HarmonyPatch(typeof(NIntent), "UpdateVisuals")]
-public class IntentLabelPatch
+internal static class NIntent_UpdateVisuals_Patch
 {
+	[HarmonyPrepare]
+	private static bool Prepare(MethodBase original)
+	{
+		if (original is not null)
+		{
+			return true;
+		}
+
+		ModLog.Info($"Target method not found for {nameof(NIntent_UpdateVisuals_Patch)} - patch skipped.");
+		return false;
+	}
+
+	[HarmonyPostfix]
 	private static void Postfix(AbstractIntent ____intent, Creature ____owner, IEnumerable<Creature> ____targets, MegaRichTextLabel ____valueLabel)
 	{
 		try
@@ -32,7 +49,7 @@ public class IntentLabelPatch
 		}
 		catch (Exception ex)
 		{
-			ModLog.Error("IntentLabelPatch", ex);
+			ModLog.Error(nameof(NIntent_UpdateVisuals_Patch), ex);
 		}
 	}
 }
