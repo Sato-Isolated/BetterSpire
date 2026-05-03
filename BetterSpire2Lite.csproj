@@ -9,17 +9,42 @@
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <CheckForOverflowUnderflow>False</CheckForOverflowUnderflow>
   </PropertyGroup>
-  <PropertyGroup />
-  <ItemGroup />
+  <PropertyGroup>
+    <ModId>BetterSpire2Lite</ModId>
+    <ModName>BetterSpire2 Lite</ModName>
+    <ModAuthor>jdr, MindLated</ModAuthor>
+    <ModDescription>QoL display mod: incoming damage totals, multi-hit labels, hand viewer, skip splash. Safe for multiplayer.</ModDescription>
+    <ModForkedFrom>https://www.nexusmods.com/slaythespire2/mods/2</ModForkedFrom>
+    <ModVersion>v2.0</ModVersion>
+  </PropertyGroup>
+
+  <Target Name="GenerateModManifest" AfterTargets="Build">
+    <PropertyGroup>
+      <ModManifestContent>{
+  "id": "$(ModId)",
+  "name": "$(ModName)",
+  "author": "$(ModAuthor)",
+  "description": "$(ModDescription)",
+  "version": "$(ModVersion)",
+  "has_pck": false,
+  "has_dll": true,
+  "dependencies": [],
+  "affects_gameplay": false,
+  "forked_from": "$(ModForkedFrom)"
+}</ModManifestContent>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(OutputPath)$(ModId).json" Lines="$(ModManifestContent)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+  </Target>
+
   <ItemGroup>
     <Reference Include="GodotSharp">
-      <HintPath>..\..\..\..\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\GodotSharp.dll</HintPath>
+      <HintPath>GodotSharp.dll</HintPath>
     </Reference>
     <Reference Include="sts2">
-      <HintPath>..\..\..\..\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\sts2.dll</HintPath>
+      <HintPath>sts2.dll</HintPath>
     </Reference>
     <Reference Include="0Harmony">
-      <HintPath>..\..\..\..\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\0Harmony.dll</HintPath>
+      <HintPath>0Harmony.dll</HintPath>
     </Reference>
   </ItemGroup>
 </Project>
