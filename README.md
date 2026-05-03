@@ -1,5 +1,7 @@
 # BetterSpire2 Lite
 
+Forked from [BetterSpire2 Lite by jdr](https://www.nexusmods.com/slaythespire2/mods/2) — additional features and improvements by MindLated.
+
 BetterSpire2 Lite is a Slay the Spire 2 quality-of-life mod focused on clearer combat information, better multiplayer visibility, and a few convenience upgrades.
 
 ## Features
