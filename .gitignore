@@ -23,6 +23,10 @@ out/
 
 # Github
 .github/
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml
+!.github/workflows/*.yaml
 
 # NuGet
 packages/
