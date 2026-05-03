@@ -9,24 +9,24 @@ namespace BetterSpire2.Patches.UI;
 [HarmonyPatch(typeof(NGame), "LaunchMainMenu")]
 internal static class NGame_LaunchMainMenu_Patch
 {
-	
 
-	[HarmonyPrefix]
-	private static void Prefix(ref bool skipLogo)
-	{
-		if (ModSettings.SkipSplash)
-		{
-			skipLogo = true;
-		}
-		PartyManager.ClearMutes();
-	}
 
-	[HarmonyPostfix]
-	private static void Postfix()
-	{
-		if (ModSettings.InstantFastMode)
-		{
-			ModLog.Info("Instant Fast Mode enabled (combat-only)");
-		}
-	}
+    [HarmonyPrefix]
+    private static void Prefix(ref bool skipLogo)
+    {
+        if (ModSettings.SkipSplash)
+        {
+            skipLogo = true;
+        }
+        PartyManager.ClearMutes();
+    }
+
+    [HarmonyPostfix]
+    private static void Postfix()
+    {
+        if (ModSettings.InstantFastMode)
+        {
+            ModLog.Info("Instant Fast Mode enabled (combat-only)");
+        }
+    }
 }

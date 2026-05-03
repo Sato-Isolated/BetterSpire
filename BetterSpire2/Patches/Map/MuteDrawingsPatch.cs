@@ -10,12 +10,12 @@ namespace BetterSpire2.Patches.Map;
 [HarmonyPatch(typeof(NMapDrawings), "HandleDrawingMessage", new[] { typeof(MapDrawingMessage), typeof(ulong) })]
 internal static class NMapDrawings_HandleDrawingMessage_Patch
 {
-	
 
-	[HarmonyPrefix]
-	private static bool Prefix(NMapDrawings __instance, ulong senderId)
-	{
-		PartyManager.MapDrawings = __instance;
-		return !PartyManager.IsDrawingMuted(senderId);
-	}
+
+    [HarmonyPrefix]
+    private static bool Prefix(NMapDrawings __instance, ulong senderId)
+    {
+        PartyManager.MapDrawings = __instance;
+        return !PartyManager.IsDrawingMuted(senderId);
+    }
 }

@@ -1,6 +1,6 @@
-using System;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
+using System;
 
 namespace BetterSpire2.Patches.Combat;
 
@@ -10,19 +10,19 @@ namespace BetterSpire2.Patches.Combat;
 [HarmonyPatch(typeof(CombatManager), nameof(CombatManager.SetUpCombat))]
 internal static class CombatManager_SetUpCombat_Patch
 {
-	
 
-	[HarmonyPostfix]
-	private static void Postfix()
-	{
-		try
-		{
-			DeckTracker.OnCombatSetUp();
-			TurnSummaryTracker.OnCombatSetUp();
-		}
-		catch (Exception ex)
-		{
-			ModLog.Error(nameof(CombatManager_SetUpCombat_Patch), ex);
-		}
-	}
+
+    [HarmonyPostfix]
+    private static void Postfix()
+    {
+        try
+        {
+            DeckTracker.OnCombatSetUp();
+            TurnSummaryTracker.OnCombatSetUp();
+        }
+        catch (Exception ex)
+        {
+            ModLog.Error(nameof(CombatManager_SetUpCombat_Patch), ex);
+        }
+    }
 }

@@ -9,12 +9,12 @@ namespace BetterSpire2.Patches.Combat;
 [HarmonyPatch(typeof(CombatManager), nameof(CombatManager.Reset))]
 internal static class CombatManager_Reset_Patch
 {
-	
 
-	[HarmonyPostfix]
-	private static void Postfix()
-	{
-		DamageTracker.Hide();
-		TurnSummaryTracker.Hide();
-	}
+
+    [HarmonyPostfix]
+    private static void Postfix()
+    {
+        DamageTracker.Hide();
+        TurnSummaryTracker.Hide();
+    }
 }

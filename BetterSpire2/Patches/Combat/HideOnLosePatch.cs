@@ -9,14 +9,14 @@ namespace BetterSpire2.Patches.Combat;
 [HarmonyPatch(typeof(CombatManager), nameof(CombatManager.LoseCombat))]
 internal static class CombatManager_LoseCombat_Patch
 {
-	
 
-	[HarmonyPrefix]
-	private static void Prefix()
-	{
-		DamageTracker.Hide();
-		DeckTracker.Hide();
-		TurnSummaryTracker.Hide();
-		InstantSpeedHelper.OnCombatEnd();
-	}
+
+    [HarmonyPrefix]
+    private static void Prefix()
+    {
+        DamageTracker.Hide();
+        DeckTracker.Hide();
+        TurnSummaryTracker.Hide();
+        InstantSpeedHelper.OnCombatEnd();
+    }
 }

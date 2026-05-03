@@ -9,11 +9,11 @@ namespace BetterSpire2.Patches.Map;
 [HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapDrawings), "HandleClearMapDrawingsMessage", new[] { typeof(ClearMapDrawingsMessage), typeof(ulong) })]
 internal static class NMapDrawings_HandleClearMapDrawingsMessage_Patch
 {
-	
 
-	[HarmonyPrefix]
-	private static bool Prefix(ulong senderId)
-	{
-		return !PartyManager.IsDrawingMuted(senderId);
-	}
+
+    [HarmonyPrefix]
+    private static bool Prefix(ulong senderId)
+    {
+        return !PartyManager.IsDrawingMuted(senderId);
+    }
 }

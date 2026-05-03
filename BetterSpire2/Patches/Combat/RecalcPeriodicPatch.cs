@@ -1,5 +1,4 @@
 using Godot;
-using System.Reflection;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Nodes.Combat;
 
@@ -11,15 +10,15 @@ namespace BetterSpire2.Patches.Combat;
 [HarmonyPatch(typeof(NIntent), nameof(NIntent._Process))]
 internal static class NIntent_Process_Patch
 {
-	
 
-	[HarmonyPostfix]
-	private static void Postfix()
-	{
-		ulong ticksMsec = Time.GetTicksMsec();
-		if (DamageTrackerRefreshThrottle.TryAcquireIntentProcessRefresh(ticksMsec, 250))
-		{
-			DamageTracker.Recalculate();
-		}
-	}
+
+    [HarmonyPostfix]
+    private static void Postfix()
+    {
+        ulong ticksMsec = Time.GetTicksMsec();
+        if (DamageTrackerRefreshThrottle.TryAcquireIntentProcessRefresh(ticksMsec, 250))
+        {
+            DamageTracker.Recalculate();
+        }
+    }
 }

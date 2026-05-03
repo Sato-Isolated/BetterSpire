@@ -1,7 +1,6 @@
-using System;
-using System.Reflection;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Entities.Creatures;
+using System;
 
 namespace BetterSpire2.Patches.Combat;
 
@@ -11,28 +10,28 @@ namespace BetterSpire2.Patches.Combat;
 [HarmonyPatch(typeof(Creature), "ClearBlock", new Type[] { })]
 internal static class Creature_ClearBlock_Patch
 {
-	
 
-	[HarmonyPrefix]
-	private static void Prefix(Creature __instance, ref int __state)
-	{
-		__state = TurnSummaryTracker.ShouldTrackBlockChanges(__instance) ? __instance.Block : 0;
-	}
 
-	[HarmonyPostfix]
-	private static void Postfix(Creature __instance, int __state)
-	{
-		try
-		{
-			int amount = Math.Max(0, __state - __instance.Block);
-			if (amount > 0)
-			{
-				TurnSummaryTracker.RecordBlockCleared(__instance, amount);
-			}
-		}
-		catch (Exception ex)
-		{
-			ModLog.Error(nameof(Creature_ClearBlock_Patch), ex);
-		}
-	}
+    [HarmonyPrefix]
+    private static void Prefix(Creature __instance, ref int __state)
+    {
+        __state = TurnSummaryTracker.ShouldTrackBlockChanges(__instance) ? __instance.Block : 0;
+    }
+
+    [HarmonyPostfix]
+    private static void Postfix(Creature __instance, int __state)
+    {
+        try
+        {
+            int amount = Math.Max(0, __state - __instance.Block);
+            if (amount > 0)
+            {
+                TurnSummaryTracker.RecordBlockCleared(__instance, amount);
+            }
+        }
+        catch (Exception ex)
+        {
+            ModLog.Error(nameof(Creature_ClearBlock_Patch), ex);
+        }
+    }
 }
