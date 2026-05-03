@@ -1,8 +1,54 @@
+# Build output
 bin/
 obj/
-.vs/
+out/
+
+# User-specific files
 *.user
 *.rsuser
 *.suo
-.github/
-.serena/
+*.userosscache
+*.sln.docstates
+
+# IDE folders
+.vs/
+.idea/
+
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# NuGet
+packages/
+*.nupkg
+*.snupkg
+project.assets.json
+project.nuget.cache
+
+# Logs
+*.log
+
+# Test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# Generated files
+Generated/
+*.g.cs
+*.g.i.cs
+
+# Publish output
+publish/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local environment files
+.env
+.env.*
