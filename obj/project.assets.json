@@ -8,26 +8,23 @@
     "net9.0": []
   },
   "packageFolders": {
-    "/home/runner/.nuget/packages/": {}
+    "C:\\Users\\ismys\\.nuget\\packages\\": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/home/runner/work/BetterSpire/BetterSpire/BetterSpire2Lite.csproj",
+      "projectUniqueName": "C:\\Users\\ismys\\Documents\\BetterSpire\\BetterSpire2Lite.csproj",
       "projectName": "BetterSpire2Lite",
-      "projectPath": "/home/runner/work/BetterSpire/BetterSpire/BetterSpire2Lite.csproj",
-      "packagesPath": "/home/runner/.nuget/packages/",
-      "outputPath": "/home/runner/work/BetterSpire/BetterSpire/obj/",
+      "projectPath": "C:\\Users\\ismys\\Documents\\BetterSpire\\BetterSpire2Lite.csproj",
+      "packagesPath": "C:\\Users\\ismys\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\ismys\\Documents\\BetterSpire\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
-        "/home/runner/.nuget/NuGet/NuGet.Config"
+        "C:\\Users\\ismys\\AppData\\Roaming\\NuGet\\NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net9.0"
       ],
-      "sources": {
-        "https://api.nuget.org/v3/index.json": {}
-      },
       "frameworks": {
         "net9.0": {
           "targetAlias": "net9.0",
@@ -65,7 +62,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/10.0.201/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.202/PortableRuntimeIdentifierGraph.json"
       }
     }
   }
