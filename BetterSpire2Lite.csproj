@@ -13,13 +13,13 @@
   <ItemGroup />
   <ItemGroup>
     <Reference Include="GodotSharp">
-      <HintPath>..\..\..\..\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\GodotSharp.dll</HintPath>
+      <HintPath>$(MSBuildThisFileDirectory)GodotSharp.dll</HintPath>
     </Reference>
     <Reference Include="sts2">
-      <HintPath>..\..\..\..\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\sts2.dll</HintPath>
+      <HintPath>$(MSBuildThisFileDirectory)sts2.dll</HintPath>
     </Reference>
     <Reference Include="0Harmony">
-      <HintPath>..\..\..\..\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\0Harmony.dll</HintPath>
+      <HintPath>$(MSBuildThisFileDirectory)0Harmony.dll</HintPath>
     </Reference>
   </ItemGroup>
 </Project>
