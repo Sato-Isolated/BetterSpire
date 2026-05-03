@@ -93,6 +93,7 @@ public static partial class TurnSummaryTracker
 		public int DamageDealtTotal { get; set; }
 		public int DamageDealtHp { get; set; }
 		public int DamageDealtBlocked { get; set; }
+		public int OverkillDamage { get; set; }
 		public int DamageReceivedTotal { get; set; }
 		public int DamageReceivedHp { get; set; }
 		public int DamageReceivedBlocked { get; set; }
@@ -101,6 +102,10 @@ public static partial class TurnSummaryTracker
 		public int BlockLost { get; set; }
 		public int BlockCleared { get; set; }
 		public int BlockBreaks { get; set; }
+		public int StarsGained { get; set; }
+		public int StarsSpent { get; set; }
+		public int OrbsChanneled { get; set; }
+		public int PotionsUsed { get; set; }
 		public List<PlayedCardSummary> Cards { get; } = new();
 		public IEnumerable<KeyValuePair<string, int>> BlockSources => _blockSources.OrderByDescending(p => p.Value).ThenBy(p => p.Key, StringComparer.Ordinal);
 		public int EnergyNet => EnergyGained - EnergySpent;

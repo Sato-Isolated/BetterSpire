@@ -56,7 +56,8 @@ public static partial class TurnSummaryTracker
 					break;
 
 				case DamageReceivedEntry dre:
-					if (summaries.TryGetValue(dre.Receiver, out PlayerTurnSummary? receivedSummary))
+					if (summaries.TryGetValue(dre.Receiver, out PlayerTurnSummary? receivedSummary)
+						&& !dre.Result.Props.HasFlag(ValueProp.Unblockable))
 					{
 						receivedSummary.DamageReceivedTotal += dre.Result.TotalDamage;
 						receivedSummary.DamageReceivedHp += dre.Result.UnblockedDamage;
@@ -72,6 +73,7 @@ public static partial class TurnSummaryTracker
 						dealtSummary.DamageDealtTotal += dre.Result.TotalDamage;
 						dealtSummary.DamageDealtHp += dre.Result.UnblockedDamage;
 						dealtSummary.DamageDealtBlocked += dre.Result.BlockedDamage;
+						dealtSummary.OverkillDamage += dre.Result.OverkillDamage;
 						dealtSummary.RegisterCardDamage(dre.CardSource, dre.Result.UnblockedDamage, dre.Result.BlockedDamage);
 					}
 					break;
@@ -79,6 +81,19 @@ public static partial class TurnSummaryTracker
 				case BlockGainedEntry bge when summaries.TryGetValue(bge.Receiver, out PlayerTurnSummary? blockSummary):
 					blockSummary.BlockGained += bge.Amount;
 					blockSummary.RegisterBlockGain(bge.CardPlay, bge.Amount, bge.Props);
+					break;
+
+				case StarsModifiedEntry sme when summaries.TryGetValue(sme.Actor, out PlayerTurnSummary? starsSummary):
+					if (sme.Amount > 0) starsSummary.StarsGained += sme.Amount;
+					else starsSummary.StarsSpent += -sme.Amount;
+					break;
+
+				case OrbChanneledEntry oce when summaries.TryGetValue(oce.Actor, out PlayerTurnSummary? orbSummary):
+					orbSummary.OrbsChanneled++;
+					break;
+
+				case PotionUsedEntry pue when summaries.TryGetValue(pue.Actor, out PlayerTurnSummary? potionSummary):
+					potionSummary.PotionsUsed++;
 					break;
 			}
 		}

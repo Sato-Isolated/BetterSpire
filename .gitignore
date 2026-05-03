@@ -21,6 +21,9 @@ out/
 !.vscode/launch.json
 !.vscode/extensions.json
 
+# Github
+.github/
+
 # NuGet
 packages/
 *.nupkg

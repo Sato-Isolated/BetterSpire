@@ -92,9 +92,14 @@ public static partial class TurnSummaryTracker
 
 		body.AddChild(CreateDetailRow("Cards", BuildCardsMetrics(summary)), forceReadableName: false, Node.InternalMode.Disabled);
 		body.AddChild(CreateDetailRow("Energy", BuildEnergyMetrics(summary)), forceReadableName: false, Node.InternalMode.Disabled);
-		body.AddChild(CreateDetailRow("Damage Out", BuildDamageMetrics(summary.DamageDealtTotal, summary.DamageDealtHp, summary.DamageDealtBlocked, _dealColor)), forceReadableName: false, Node.InternalMode.Disabled);
+		body.AddChild(CreateDetailRow("Damage Out", BuildDamageOutMetrics(summary)), forceReadableName: false, Node.InternalMode.Disabled);
 		body.AddChild(CreateDetailRow("Damage In", BuildDamageMetrics(summary.DamageReceivedTotal, summary.DamageReceivedHp, summary.DamageReceivedBlocked, _takeColor)), forceReadableName: false, Node.InternalMode.Disabled);
 		body.AddChild(CreateDetailRow("Block", BuildBlockMetrics(summary)), forceReadableName: false, Node.InternalMode.Disabled);
+
+		if (summary.StarsGained > 0 || summary.StarsSpent > 0)
+		{
+			body.AddChild(CreateDetailRow("Stars", BuildStarsMetrics(summary)), forceReadableName: false, Node.InternalMode.Disabled);
+		}
 
 		string? blockSourcesText = BuildBlockSourcesText(summary);
 		if (blockSourcesText != null)
@@ -124,6 +129,10 @@ public static partial class TurnSummaryTracker
 		if (summary.BlockBreaks > 0)
 		{
 			chips.AddChild(CreateStatChip($"Break {summary.BlockBreaks}", _breakColor, _chipBreakBg), forceReadableName: false, Node.InternalMode.Disabled);
+		}
+		if (summary.StarsGained > 0 || summary.StarsSpent > 0)
+		{
+			chips.AddChild(CreateStatChip($"Stars +{summary.StarsGained}/-{summary.StarsSpent}", _cardsColor, _chipCardsBg), forceReadableName: false, Node.InternalMode.Disabled);
 		}
 
 		return chips;
@@ -227,6 +236,14 @@ public static partial class TurnSummaryTracker
 		{
 			metrics.Add(("Exhaust", summary.CardsExhausted.ToString(), _cardsColor));
 		}
+		if (summary.OrbsChanneled > 0)
+		{
+			metrics.Add(("Orbs", summary.OrbsChanneled.ToString(), _cardsColor));
+		}
+		if (summary.PotionsUsed > 0)
+		{
+			metrics.Add(("Pots", summary.PotionsUsed.ToString(), _cardsColor));
+		}
 
 		return [.. metrics];
 	}
@@ -239,6 +256,35 @@ public static partial class TurnSummaryTracker
 			("Spent", summary.EnergySpent.ToString(), _takeColor),
 			("Net", FormatSignedValue(summary.EnergyNet), GetSignedMetricColor(summary.EnergyNet, _blockGainColor, _takeColor))
 		];
+	}
+
+	private static (string Label, string Value, Color Color)[] BuildDamageOutMetrics(PlayerTurnSummary summary)
+	{
+		List<(string Label, string Value, Color Color)> metrics =
+		[
+			("Total", summary.DamageDealtTotal.ToString(), _dealColor),
+			("HP", summary.DamageDealtHp.ToString(), summary.DamageDealtHp > 0 ? _dealColor : _mutedColor),
+			("Block", summary.DamageDealtBlocked.ToString(), summary.DamageDealtBlocked > 0 ? _blockGainColor : _mutedColor)
+		];
+		if (summary.OverkillDamage > 0)
+		{
+			metrics.Add(("Overkill", summary.OverkillDamage.ToString(), _mutedColor));
+		}
+		return [.. metrics];
+	}
+
+	private static (string Label, string Value, Color Color)[] BuildStarsMetrics(PlayerTurnSummary summary)
+	{
+		List<(string Label, string Value, Color Color)> metrics = [];
+		if (summary.StarsGained > 0)
+		{
+			metrics.Add(("Gain", summary.StarsGained.ToString(), _blockGainColor));
+		}
+		if (summary.StarsSpent > 0)
+		{
+			metrics.Add(("Spent", summary.StarsSpent.ToString(), _takeColor));
+		}
+		return [.. metrics];
 	}
 
 	private static (string Label, string Value, Color Color)[] BuildDamageMetrics(int totalDamage, int hpDamage, int blockedDamage, Color totalColor)
