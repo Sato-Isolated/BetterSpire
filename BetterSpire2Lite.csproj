@@ -18,22 +18,22 @@
     <ModVersion>v2.0</ModVersion>
   </PropertyGroup>
 
-  <Target Name="GenerateModManifest" AfterTargets="Build">
-    <PropertyGroup>
-      <ModManifestContent>{
-  "id": "$(ModId)",
-  "name": "$(ModName)",
-  "author": "$(ModAuthor)",
-  "description": "$(ModDescription)",
-  "version": "$(ModVersion)",
-  "has_pck": false,
-  "has_dll": true,
-  "dependencies": [],
-  "affects_gameplay": false,
-  "forked_from": "$(ModForkedFrom)"
-}</ModManifestContent>
-    </PropertyGroup>
-    <WriteLinesToFile File="$(OutputPath)$(ModId).json" Lines="$(ModManifestContent)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+  <Target Name="GenerateModManifest" AfterTargets="Build" Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <ModManifestLines Include="{" />
+      <ModManifestLines Include="  &quot;id&quot;: &quot;$(ModId)&quot;," />
+      <ModManifestLines Include="  &quot;name&quot;: &quot;$(ModName)&quot;," />
+      <ModManifestLines Include="  &quot;author&quot;: &quot;$(ModAuthor)&quot;," />
+      <ModManifestLines Include="  &quot;description&quot;: &quot;$(ModDescription)&quot;," />
+      <ModManifestLines Include="  &quot;version&quot;: &quot;$(ModVersion)&quot;," />
+      <ModManifestLines Include="  &quot;has_pck&quot;: false," />
+      <ModManifestLines Include="  &quot;has_dll&quot;: true," />
+      <ModManifestLines Include="  &quot;dependencies&quot;: []," />
+      <ModManifestLines Include="  &quot;affects_gameplay&quot;: false," />
+      <ModManifestLines Include="  &quot;forked_from&quot;: &quot;$(ModForkedFrom)&quot;" />
+      <ModManifestLines Include="}" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(TargetDir)$(ModId).json" Lines="@(ModManifestLines)" Overwrite="true" WriteOnlyWhenDifferent="true" />
   </Target>
 
   <ItemGroup>

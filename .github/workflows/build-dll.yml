@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PROJECT_PATH: ${{ github.workspace }}/BetterSpire2Lite.csproj
-      DLL_PATH: ${{ github.workspace }}/bin/Release/net9.0/BetterSpire2Lite.dll
+      OUTPUT_DIR: ${{ github.workspace }}/bin/Release/net9.0
 
     steps:
       - name: Checkout repository
@@ -29,8 +29,17 @@ jobs:
       - name: Build DLL
         run: dotnet build "$PROJECT_PATH" --configuration Release --no-restore
 
-      - name: Upload DLL artifact
+      - name: Verify build outputs
+        run: |
+          test -f "$OUTPUT_DIR/BetterSpire2Lite.dll"
+          test -f "$OUTPUT_DIR/BetterSpire2Lite.deps.json"
+          test -f "$OUTPUT_DIR/BetterSpire2Lite.json"
+
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: BetterSpire2Lite-dll
-          path: ${{ env.DLL_PATH }}
+          name: BetterSpire2Lite-build
+          path: |
+            ${{ env.OUTPUT_DIR }}/BetterSpire2Lite.dll
+            ${{ env.OUTPUT_DIR }}/BetterSpire2Lite.deps.json
+            ${{ env.OUTPUT_DIR }}/BetterSpire2Lite.json
