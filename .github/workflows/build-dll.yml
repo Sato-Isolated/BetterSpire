@@ -43,3 +43,39 @@ jobs:
             ${{ env.OUTPUT_DIR }}/BetterSpire2Lite.dll
             ${{ env.OUTPUT_DIR }}/BetterSpire2Lite.deps.json
             ${{ env.OUTPUT_DIR }}/BetterSpire2Lite.json
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      OUTPUT_DIR: ${{ github.workspace }}/bin/Release/net9.0
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore project
+        run: dotnet restore "${{ github.workspace }}/BetterSpire2Lite.csproj"
+
+      - name: Build release assets
+        run: dotnet build "${{ github.workspace }}/BetterSpire2Lite.csproj" --configuration Release --no-restore
+
+      - name: Publish GitHub prerelease
+        uses: ncipollo/release-action@v1
+        with:
+          tag: build-${{ github.run_number }}
+          name: Build ${{ github.run_number }}
+          prerelease: true
+          generateReleaseNotes: true
+          artifacts: |
+            ${{ env.OUTPUT_DIR }}/BetterSpire2Lite.dll
+            ${{ env.OUTPUT_DIR }}/BetterSpire2Lite.deps.json
+            ${{ env.OUTPUT_DIR }}/BetterSpire2Lite.json
