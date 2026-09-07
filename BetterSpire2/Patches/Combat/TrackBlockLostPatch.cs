@@ -15,7 +15,7 @@ internal static class Creature_LoseBlockInternal_Patch
     [HarmonyPrefix]
     private static void Prefix(Creature __instance, ref int __state)
     {
-        __state = TurnSummaryTracker.ShouldTrackBlockChanges(__instance) ? __instance.Block : 0;
+        __state = JournalController.ShouldTrackBlockChanges(__instance) ? __instance.Block : 0;
     }
 
     [HarmonyPostfix]
@@ -26,7 +26,7 @@ internal static class Creature_LoseBlockInternal_Patch
             int amount = Math.Max(0, __state - __instance.Block);
             if (amount > 0)
             {
-                TurnSummaryTracker.RecordBlockLost(__instance, amount);
+                JournalController.RecordBlockLost(__instance, amount);
             }
         }
         catch (Exception ex)

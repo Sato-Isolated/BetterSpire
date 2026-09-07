@@ -1,4 +1,5 @@
 using HarmonyLib;
+using System;
 using MegaCrit.Sts2.Core.Combat;
 
 namespace BetterSpire2.Patches.Combat;
@@ -11,10 +12,20 @@ internal static class CombatManager_Reset_Patch
 {
 
 
+    [HarmonyPrefix]
+    private static void Prefix() => JournalController.BeforeCombatReset();
+
     [HarmonyPostfix]
     private static void Postfix()
     {
-        DamageTracker.Hide();
-        TurnSummaryTracker.Hide();
+        Safe(DamageTracker.Hide);
+        Safe(TeammateHandViewer.Stop);
+        Safe(JournalController.Hide);
+        Safe(InstantSpeedHelper.OnCombatEnd);
+    }
+    private static void Safe(Action action)
+    {
+        try { action(); }
+        catch (Exception ex) { ModLog.Error("CombatReset", ex); }
     }
 }

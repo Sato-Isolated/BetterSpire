@@ -13,26 +13,38 @@ public class ModEntry
 
     private static bool _initialized;
 
-    private static readonly Type[] _combatPatches = new Type[11]
+    private static readonly Type[] _combatPatches = new Type[13]
     {
-        typeof(NCreature_RefreshIntents_Patch),
         typeof(CombatManager_SetReadyToEndTurn_Patch),
-        typeof(NIntent_Process_Patch),
         typeof(CombatManager_SetUpCombat_Patch),
         typeof(CombatManager_Reset_Patch),
         typeof(CombatManager_EndCombatInternal_Patch),
         typeof(CombatManager_LoseCombat_Patch),
-        typeof(Creature_DamageBlockInternal_Patch),
         typeof(Creature_LoseBlockInternal_Patch),
         typeof(Creature_ClearBlock_Patch),
-        typeof(PlayerCombatState_GainEnergy_Patch)
+        typeof(Journal_BlockClearDecision_Patch),
+        typeof(PlayerCombatState_GainEnergy_Patch),
+        typeof(Journal_HistoryClear_Patch),
+        typeof(Journal_RunLaunch_Patch),
+        typeof(Journal_RunCleanup_Patch),
+        typeof(Journal_Healing_Patch)
     };
 
-    private static readonly Type[] _uiPatches = new Type[3]
+    private static readonly Type[] _poisonPatches = new Type[4]
+    {
+        typeof(Journal_DamageCommandScope_Patch),
+        typeof(Journal_PoisonHistoryTag_Patch),
+        typeof(Journal_PoisonRemoved_Patch),
+        typeof(Journal_PoisonDamageOrigin_Patch)
+    };
+
+    private static readonly Type[] _uiPatches = new Type[5]
     {
         typeof(NIntent_UpdateVisuals_Patch),
         typeof(NGame_LaunchMainMenu_Patch),
-        typeof(NGame_Input_Patch)
+        typeof(NGame_Input_Patch),
+        typeof(GameReadyPatch),
+        typeof(GameExitPatch)
     };
 
     private static readonly Type[] _mapPatches = new Type[2]
@@ -76,10 +88,12 @@ public class ModEntry
         int succeeded = 0;
         int failed = 0;
         PatchGroup(harmony, "Combat", _combatPatches, ref succeeded, ref failed);
+        PatchGroup(harmony, "Poison", _poisonPatches, ref succeeded, ref failed);
         PatchGroup(harmony, "UI", _uiPatches, ref succeeded, ref failed);
         PatchGroup(harmony, "Map", _mapPatches, ref succeeded, ref failed);
         ModLog.Info($"Harmony patching complete: {succeeded} succeeded, {failed} failed");
-        ModLog.Info("ModEntry.Init() complete");
+        ModLog.Info("ModEntry.Init() complete — Guardian 3.5.3 compact HUD preview");
+        ModRuntime.EnsureStarted();
         if (ModSettings.ShowClock)
         {
             ClockDisplay.Toggle(on: true);

@@ -10,19 +10,18 @@ namespace BetterSpire2.Patches.Combat;
 [HarmonyPatch(typeof(CombatManager), nameof(CombatManager.SetUpCombat))]
 internal static class CombatManager_SetUpCombat_Patch
 {
-
-
     [HarmonyPostfix]
     private static void Postfix()
     {
-        try
-        {
-            DeckTracker.OnCombatSetUp();
-            TurnSummaryTracker.OnCombatSetUp();
-        }
-        catch (Exception ex)
-        {
-            ModLog.Error(nameof(CombatManager_SetUpCombat_Patch), ex);
-        }
+        Safe("InstantSpeed", InstantSpeedHelper.OnCombatStart);
+        Safe("Guardian", DamageTracker.OnCombatSetUp);
+        Safe("Journal", JournalController.OnCombatSetUp);
+        Safe("HandViewer", TeammateHandViewer.OnCombatSetUp);
+        Safe("Clock", ClockDisplay.SyncVisibility);
+    }
+    private static void Safe(string module, Action action)
+    {
+        try { action(); }
+        catch (Exception ex) { ModLog.Error("CombatSetup." + module, ex); }
     }
 }

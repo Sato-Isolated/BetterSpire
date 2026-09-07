@@ -1,68 +1,91 @@
 #nullable enable
+using System;
+using System.Collections.Generic;
 using Godot;
 using HarmonyLib;
+using BetterSpire2.DamageMeter;
 using MegaCrit.Sts2.Core.Nodes;
-using System;
 
 namespace BetterSpire2.Patches.Input;
 
-/// <summary>
-/// Wires BetterSpire hotkeys and overlay input into the game's global input loop.
-/// </summary>
+/// <summary>Consume only owned shortcuts and active drags, before native NGame input.</summary>
 [HarmonyPatch(typeof(NGame), nameof(NGame._Input))]
 internal static class NGame_Input_Patch
 {
-
-
-    [HarmonyPostfix]
-    private static void Postfix(InputEvent inputEvent)
+    private static readonly HashSet<Key> OwnedKeys = new();
+    internal static void ResetOwnedKeys() => OwnedKeys.Clear();
+    // Native NGame debug shortcuts are tested on release, so consume the whole owned key cycle.
+    private static bool HandleKeyEvent(InputEventKey key)
+    {
+        if (key.IsEcho()) return OwnedKeys.Contains(key.Keycode);
+        if (!key.Pressed) return OwnedKeys.Remove(key.Keycode);
+        bool handled = HandleKey(key);
+        if (handled) OwnedKeys.Add(key.Keycode);
+        return handled;
+    }
+    [HarmonyPrefix]
+    private static bool Prefix(InputEvent inputEvent)
     {
         try
         {
-            ClockDisplay.Update();
-            ClockDisplay.HandleInput(inputEvent);
-            ModConfigBridge.TryRegister();
-            if (inputEvent is InputEventKey)
+            if (NGame.Instance?.FeedbackScreen?.Visible == true) { HudOverlayManager.Reset(); return true; }
+            bool handled = inputEvent switch
             {
-                NGame? instance = NGame.Instance;
-                if (instance != null && instance.FeedbackScreen?.Visible == true)
-                {
-                    return;
-                }
-            }
-            if (inputEvent is InputEventKey inputEventKey && inputEventKey.Keycode == Key.F1 && inputEventKey.Pressed && !inputEventKey.IsEcho())
+                InputEventKey key => HandleKeyEvent(key),
+                InputEventMouseButton or InputEventMouseMotion => HudOverlayManager.HandleInput(inputEvent),
+                _ => false
+            };
+            if (!handled) return true;
+            NGame.Instance?.GetViewport().SetInputAsHandled();
+            return false;
+        }
+        catch (Exception ex) { ModLog.Error("BetterSpire.Input", ex); return true; }
+    }
+    private static bool HandleKey(InputEventKey key)
+    {
+        // Hidden mod windows must not steal Escape/navigation from native modal screens.
+        if (!SettingsMenu.IsVisible && JournalService.GameUiBlocking &&
+            key.Keycode is Key.Escape or Key.Pageup or Key.Pagedown) return false;
+        if (key.AltPressed)
+        {
+            if (!key.CtrlPressed && DamageTracker.DetailsVisible && key.Keycode is Key.Pageup or Key.Pagedown)
+            { DamageTracker.ChangeDetailPage(key.Keycode == Key.Pagedown ? 1 : -1); return true; }
+            return false;
+        }
+        if (key.CtrlPressed)
+        {
+            switch (key.Keycode)
             {
-                SettingsMenu.Toggle();
-                return;
-            }
-            if (inputEvent is InputEventKey inputEventKey2 && inputEventKey2.Keycode == Key.F3 && inputEventKey2.Pressed && !inputEventKey2.IsEcho())
-            {
-                DeckTracker.Toggle();
-                return;
-            }
-            if (inputEvent is InputEventKey { Pressed: not false } inputEventKey3 && !inputEventKey3.IsEcho())
-            {
-                if (inputEventKey3.Keycode == Key.Pagedown)
-                {
-                    DeckTracker.NextPage();
-                    return;
-                }
-                if (inputEventKey3.Keycode == Key.Pageup)
-                {
-                    DeckTracker.PrevPage();
-                    return;
-                }
-            }
-            if ((inputEvent is InputEventMouseButton || inputEvent is InputEventMouseMotion) ? true : false)
-            {
-                SettingsMenu.HandleMouseInput(inputEvent);
-                DeckTracker.HandleMouseInput(inputEvent);
-                TurnSummaryTracker.HandleMouseInput(inputEvent);
+                case Key.F2: DamageTracker.ExportLastForecast(); return true;
+                case Key.F5: JournalController.ExportJournal(); return true;
+                case Key.F7: PerformanceProbe.Export(); return true;
+                default: return false;
             }
         }
-        catch (Exception ex)
+        switch (key.Keycode)
         {
-            ModLog.Error(nameof(NGame_Input_Patch), ex);
+            case Key.F1: SettingsMenu.Toggle(); return true;
+            case Key.F2:
+                if (ModSettings.PlayerDamageTotal) { JournalController.Hide(); DamageTracker.ToggleDetails(); }
+                return true;
+            case Key.F3: TeammateHandViewer.Toggle(); return true;
+            case Key.F4: DamageTracker.ToggleVisibility(); return true;
+            case Key.F5:
+                if (DamageTracker.DetailsVisible) DamageTracker.ToggleDetails();
+                JournalController.ToggleJournal(); return true;
+            case Key.F6: DamageMeterController.Toggle(); return true;
+            case Key.F7: PerformanceProbe.Toggle(); return true;
+            case Key.Escape:
+                if (SettingsMenu.IsVisible) { SettingsMenu.Hide(); return true; }
+                if (TeammateHandViewer.IsVisible) { TeammateHandViewer.Hide(); return true; }
+                if (JournalController.IsJournalVisible) { JournalController.Hide(); return true; }
+                if (DamageTracker.DetailsVisible) { DamageTracker.ToggleDetails(); return true; }
+                return false;
+            case Key.Pageup when TeammateHandViewer.IsVisible && !SettingsMenu.IsVisible:
+                TeammateHandViewer.PrevPage(); return true;
+            case Key.Pagedown when TeammateHandViewer.IsVisible && !SettingsMenu.IsVisible:
+                TeammateHandViewer.NextPage(); return true;
+            default: return false;
         }
     }
 }

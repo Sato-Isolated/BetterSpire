@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net9.0</TargetFramework>
+    <LangVersion>13</LangVersion><Nullable>enable</Nullable><EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="HudTests.cs" />
+    <Compile Include="CompactHudTests.cs" />
+    <Compile Include="../BetterSpire2/UI/CompactHudGeometry.cs" Link="UI/CompactHudGeometry.cs" />
+    <Compile Include="HudCoexistenceTests.cs" />
+    <Compile Include="../BetterSpire2/UI/HudVisibilityPolicy.cs" Link="UI/HudVisibilityPolicy.cs" />
+    <Compile Include="../BetterSpire2/Core/ModSettingPolicy.cs" Link="Core/ModSettingPolicy.cs" />
+    <Compile Include="../BetterSpire2/HandViewer/HandViewerSelection.cs" Link="Hand/HandViewerSelection.cs" />
+    <Compile Include="../BetterSpire2/UI/OverlayAxis.cs" Link="UI/OverlayAxis.cs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,2857 @@
+[
+  {
+    "Name": "empty",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "FinalHp": 30,
+        "HpLost": 0
+      }
+    }
+  },
+  {
+    "Name": "single attack",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 9,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "FinalHp": 21,
+        "HpLost": 9
+      }
+    }
+  },
+  {
+    "Name": "block shared between hits",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 12,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 5,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 5,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 5,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 3,
+        "BlockSpent": 12,
+        "FinalBlock": 0
+      }
+    }
+  },
+  {
+    "Name": "excess block remains",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 20,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 5,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 4,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 0,
+        "FinalBlock": 11
+      }
+    }
+  },
+  {
+    "Name": "tungsten per hit",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [
+            {
+              "Kind": "Reduction",
+              "Value": 1,
+              "Charges": 0,
+              "Source": "Reduction"
+            }
+          ],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 2,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 2,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 2,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 3,
+        "Prevented": 3
+      }
+    }
+  },
+  {
+    "Name": "one damage neutralised",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [
+            {
+              "Kind": "Reduction",
+              "Value": 1,
+              "Charges": 0,
+              "Source": "Reduction"
+            }
+          ],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 1,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 1,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 1,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 0
+      }
+    }
+  },
+  {
+    "Name": "fully blocked buffer survives",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 5,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [
+            {
+              "Kind": "Buffer",
+              "Value": 0,
+              "Charges": 1,
+              "Source": "Buffer"
+            }
+          ],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 5,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 7,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 1,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 1,
+        "BuffersUsed": 1,
+        "BlockSpent": 5
+      }
+    }
+  },
+  {
+    "Name": "rod does not consume buffer at zero",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [
+            {
+              "Kind": "Reduction",
+              "Value": 1,
+              "Charges": 0,
+              "Source": "Reduction"
+            },
+            {
+              "Kind": "Buffer",
+              "Value": 0,
+              "Charges": 1,
+              "Source": "Buffer"
+            }
+          ],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 1,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 8,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 2,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 1,
+        "BuffersUsed": 1
+      }
+    }
+  },
+  {
+    "Name": "two buffers three attacks",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [
+            {
+              "Kind": "Buffer",
+              "Value": 0,
+              "Charges": 2,
+              "Source": "Buffer"
+            }
+          ],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 9,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 9,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 9,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 9,
+        "BuffersUsed": 2
+      }
+    }
+  },
+  {
+    "Name": "fractional buffer is not consumed",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [
+            {
+              "Kind": "Buffer",
+              "Value": 0,
+              "Charges": 1,
+              "Source": "Buffer"
+            }
+          ],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 0.5,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 2,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 3,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 3,
+        "BuffersUsed": 1
+      }
+    }
+  },
+  {
+    "Name": "intangible cap before tungsten",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [
+            {
+              "Kind": "Reduction",
+              "Value": 1,
+              "Charges": 0,
+              "Source": "Reduction"
+            },
+            {
+              "Kind": "Cap",
+              "Value": 1,
+              "Charges": 0,
+              "Source": "Cap"
+            }
+          ],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 40,
+          "PoweredAttack": true,
+          "DamageCap": 1
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 0
+      }
+    }
+  },
+  {
+    "Name": "hp cap order reduction then cap",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [
+            {
+              "Kind": "Reduction",
+              "Value": 1,
+              "Charges": 0,
+              "Source": "Reduction"
+            },
+            {
+              "Kind": "Cap",
+              "Value": 1,
+              "Charges": 0,
+              "Source": "Cap"
+            }
+          ],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 8
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 1
+      }
+    }
+  },
+  {
+    "Name": "hp cap order cap then reduction",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [
+            {
+              "Kind": "Cap",
+              "Value": 1,
+              "Charges": 0,
+              "Source": "Cap"
+            },
+            {
+              "Kind": "Reduction",
+              "Value": 1,
+              "Charges": 0,
+              "Source": "Reduction"
+            }
+          ],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 8
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 0
+      }
+    }
+  },
+  {
+    "Name": "future diadem before cap",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "AttackMultiplier",
+          "Target": "p",
+          "Source": "AttackMultiplier",
+          "Amount": 0.5
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 8,
+          "PoweredAttack": true,
+          "DamageCap": 1
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 1
+      }
+    }
+  },
+  {
+    "Name": "future diadem fractional damage",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "AttackMultiplier",
+          "Target": "p",
+          "Source": "AttackMultiplier",
+          "Amount": 0.5
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 6.75,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 3
+      }
+    }
+  },
+  {
+    "Name": "diadem not on hp loss",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "AttackMultiplier",
+          "Target": "p",
+          "Source": "AttackMultiplier",
+          "Amount": 0.5
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 9,
+          "BypassesBlock": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 9
+      }
+    }
+  },
+  {
+    "Name": "fractional damage after block",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 1,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 1.5,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 1.5,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 1,
+        "BlockSpent": 1
+      }
+    }
+  },
+  {
+    "Name": "fractional block consumption",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 2,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 0.5,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 0.5,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 2,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 0,
+        "BlockSpent": 2
+      }
+    }
+  },
+  {
+    "Name": "osty after owner block",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 3,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": "pet",
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        },
+        {
+          "Id": "pet",
+          "Name": "Osty",
+          "Hp": 10,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": "p",
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": false
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 8,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 0,
+        "BlockSpent": 3
+      },
+      "pet": {
+        "HpLost": 5,
+        "FinalHp": 5
+      }
+    }
+  },
+  {
+    "Name": "osty overkill tungsten player only",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": "pet",
+          "HpRules": [
+            {
+              "Kind": "Reduction",
+              "Value": 1,
+              "Charges": 0,
+              "Source": "Reduction"
+            }
+          ],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        },
+        {
+          "Id": "pet",
+          "Name": "Osty",
+          "Hp": 4,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": "p",
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": false
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 10,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 2,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 6
+      },
+      "pet": {
+        "HpLost": 4
+      }
+    }
+  },
+  {
+    "Name": "osty buffer prevents first hit",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": "pet",
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        },
+        {
+          "Id": "pet",
+          "Name": "Osty",
+          "Hp": 4,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": "p",
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [
+            {
+              "Kind": "Buffer",
+              "Value": 0,
+              "Charges": 1,
+              "Source": "Buffer"
+            }
+          ],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": false
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 8,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 12,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 8
+      },
+      "pet": {
+        "HpLost": 4,
+        "BuffersUsed": 1
+      }
+    }
+  },
+  {
+    "Name": "direct pet hit shares owner block",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 8,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        },
+        {
+          "Id": "pet",
+          "Name": "Osty",
+          "Hp": 4,
+          "MaxHp": 60,
+          "Block": 99,
+          "SharedBlockOwner": "p",
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": false
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "pet",
+          "Source": "Damage",
+          "Amount": 10
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 0,
+        "BlockSpent": 8
+      },
+      "pet": {
+        "HpLost": 2,
+        "FinalBlock": 99
+      }
+    }
+  },
+  {
+    "Name": "no redirect for unpowered damage",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": "pet",
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        },
+        {
+          "Id": "pet",
+          "Name": "Osty",
+          "Hp": 20,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": "p",
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": false
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 9
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 9
+      },
+      "pet": {
+        "HpLost": 0
+      }
+    }
+  },
+  {
+    "Name": "dead pet cannot redirect",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": "pet",
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        },
+        {
+          "Id": "pet",
+          "Name": "Osty",
+          "Hp": 0,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": "p",
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": false
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 9,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 9
+      }
+    }
+  },
+  {
+    "Name": "pet without redirect not a shield",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        },
+        {
+          "Id": "pet",
+          "Name": "Osty",
+          "Hp": 40,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": "p",
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": false
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 9,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 9
+      },
+      "pet": {
+        "HpLost": 0
+      }
+    }
+  },
+  {
+    "Name": "powered unblockable can redirect",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 40,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": "pet",
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        },
+        {
+          "Id": "pet",
+          "Name": "Osty",
+          "Hp": 5,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": "p",
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": false
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 8,
+          "PoweredAttack": true,
+          "BypassesBlock": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 3,
+        "FinalBlock": 40
+      },
+      "pet": {
+        "HpLost": 5
+      }
+    }
+  },
+  {
+    "Name": "heal before attack",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 10,
+          "MaxHp": 20,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Heal",
+          "Target": "p",
+          "Source": "Heal",
+          "Amount": 5
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 12
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "FinalHp": 3,
+        "HpLost": 12,
+        "Healed": 5
+      }
+    }
+  },
+  {
+    "Name": "heal cannot resurrect",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 5,
+          "MaxHp": 20,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 8
+        },
+        {
+          "Kind": "Heal",
+          "Target": "p",
+          "Source": "Heal",
+          "Amount": 10
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "FinalHp": 0,
+        "HpLost": 5,
+        "Healed": 0
+      }
+    }
+  },
+  {
+    "Name": "heal cannot exceed max hp",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 18,
+          "MaxHp": 20,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Heal",
+          "Target": "p",
+          "Source": "Heal",
+          "Amount": 10
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "FinalHp": 20,
+        "Healed": 2
+      }
+    }
+  },
+  {
+    "Name": "lizard tail then second attack",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 5,
+          "MaxHp": 20,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 10,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 8,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 3,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "FinalHp": 7,
+        "HpLost": 8,
+        "Healed": 10,
+        "Revivals": 1
+      }
+    }
+  },
+  {
+    "Name": "lizard tail only once",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 5,
+          "MaxHp": 20,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 10,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 8,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 30,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "FinalHp": 0,
+        "HpLost": 15,
+        "Healed": 10,
+        "Revivals": 1
+      }
+    }
+  },
+  {
+    "Name": "later block cannot prevent earlier lethal",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 4,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 8
+        },
+        {
+          "Kind": "Block",
+          "Target": "p",
+          "Source": "Block",
+          "Amount": 99
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "FinalHp": 0,
+        "BlockGained": 0
+      }
+    }
+  },
+  {
+    "Name": "block before burn",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Block",
+          "Target": "p",
+          "Source": "Block",
+          "Amount": 6
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 8
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 2,
+        "BlockGained": 6
+      }
+    }
+  },
+  {
+    "Name": "burn before block",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 8
+        },
+        {
+          "Kind": "Block",
+          "Target": "p",
+          "Source": "Block",
+          "Amount": 6
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 8,
+        "FinalBlock": 6
+      }
+    }
+  },
+  {
+    "Name": "beating remnant remaining budget",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [
+            {
+              "Kind": "TurnLimit",
+              "Value": 20,
+              "Charges": 0,
+              "Source": "TurnLimit"
+            }
+          ],
+          "DamageAlreadyReceived": 17,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 10,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 10,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 3,
+        "FinalHp": 27
+      }
+    }
+  },
+  {
+    "Name": "buffer does not spend remnant budget",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [
+            {
+              "Kind": "TurnLimit",
+              "Value": 20,
+              "Charges": 0,
+              "Source": "TurnLimit"
+            },
+            {
+              "Kind": "Buffer",
+              "Value": 0,
+              "Charges": 1,
+              "Source": "Buffer"
+            }
+          ],
+          "DamageAlreadyReceived": 17,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 10,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 10,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 10,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 3,
+        "BuffersUsed": 1
+      }
+    }
+  },
+  {
+    "Name": "slippery charges consumed sequentially",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [
+            {
+              "Kind": "Slippery",
+              "Value": 1,
+              "Charges": 1,
+              "Source": "Slippery"
+            }
+          ],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 10,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 10,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 11
+      }
+    }
+  },
+  {
+    "Name": "fully blocked hit keeps slippery",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 10,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [
+            {
+              "Kind": "Slippery",
+              "Value": 1,
+              "Charges": 1,
+              "Source": "Slippery"
+            }
+          ],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 10,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 10,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 1,
+        "BlockSpent": 10
+      }
+    }
+  },
+  {
+    "Name": "redirect reaction uses original target and pet result",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": "pet",
+          "HpRules": [
+            {
+              "Kind": "TurnLimit",
+              "Value": 10,
+              "Charges": 0,
+              "Source": "TurnLimit"
+            }
+          ],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        },
+        {
+          "Id": "pet",
+          "Name": "Osty",
+          "Hp": 4,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": "p",
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": false
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 10,
+          "PoweredAttack": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 10,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 12
+      },
+      "pet": {
+        "HpLost": 4
+      }
+    }
+  },
+  {
+    "Name": "poison kills before enemy attack",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        },
+        {
+          "Id": "e",
+          "Name": "Enemy",
+          "Hp": 4,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": false
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "e",
+          "Source": "Damage",
+          "Amount": 5,
+          "BypassesBlock": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 8,
+          "Attacker": "e",
+          "RequireLivingAttacker": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": [
+        "e"
+      ]
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 0
+      },
+      "e": {
+        "FinalHp": 0
+      }
+    }
+  },
+  {
+    "Name": "capped poison does not cancel attack",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        },
+        {
+          "Id": "e",
+          "Name": "Enemy",
+          "Hp": 4,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": false
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "e",
+          "Source": "Damage",
+          "Amount": 5,
+          "BypassesBlock": true,
+          "DamageCap": 2
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 8,
+          "Attacker": "e",
+          "RequireLivingAttacker": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": [
+        "e"
+      ]
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 8
+      },
+      "e": {
+        "FinalHp": 2
+      }
+    }
+  },
+  {
+    "Name": "buffered poison does not cancel attack",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        },
+        {
+          "Id": "e",
+          "Name": "Enemy",
+          "Hp": 4,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [
+            {
+              "Kind": "Buffer",
+              "Value": 0,
+              "Charges": 1,
+              "Source": "Buffer"
+            }
+          ],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": false
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "e",
+          "Source": "Damage",
+          "Amount": 5,
+          "BypassesBlock": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 8,
+          "Attacker": "e",
+          "RequireLivingAttacker": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": [
+        "e"
+      ]
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 8
+      },
+      "e": {
+        "FinalHp": 4
+      }
+    }
+  },
+  {
+    "Name": "poison ticks decrease",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        },
+        {
+          "Id": "e",
+          "Name": "Enemy",
+          "Hp": 10,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": false
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "e",
+          "Source": "Damage",
+          "Amount": 3,
+          "BypassesBlock": true
+        },
+        {
+          "Kind": "Damage",
+          "Target": "e",
+          "Source": "Damage",
+          "Amount": 2,
+          "BypassesBlock": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "e": {
+        "FinalHp": 5
+      }
+    }
+  },
+  {
+    "Name": "both orichalcum latches plus plating",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Block",
+          "Target": "p",
+          "Source": "Block",
+          "Amount": 4
+        },
+        {
+          "Kind": "Block",
+          "Target": "p",
+          "Source": "Block",
+          "Amount": 6
+        },
+        {
+          "Kind": "Block",
+          "Target": "p",
+          "Source": "Block",
+          "Amount": 3
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 15
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 2,
+        "BlockGained": 13
+      }
+    }
+  },
+  {
+    "Name": "initial block disables orichalcum event",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 1,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Block",
+          "Target": "p",
+          "Source": "Block",
+          "Amount": 4
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 10
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 5,
+        "BlockGained": 4
+      }
+    }
+  },
+  {
+    "Name": "constrict then demise bypass",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 8,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 10
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 3,
+          "BypassesBlock": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 5,
+        "BlockSpent": 8
+      }
+    }
+  },
+  {
+    "Name": "regen before late disintegration",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 5,
+          "MaxHp": 20,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Heal",
+          "Target": "p",
+          "Source": "Heal",
+          "Amount": 5
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 7
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "FinalHp": 3,
+        "Healed": 5
+      }
+    }
+  },
+  {
+    "Name": "hp loss bypasses existing block",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 99,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 4,
+          "BypassesBlock": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 4,
+        "FinalBlock": 99
+      }
+    }
+  },
+  {
+    "Name": "overkill not double counted",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 4,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 200
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 4,
+        "FinalHp": 0
+      }
+    }
+  },
+  {
+    "Name": "negative damage clamped",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": -20
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 0
+      }
+    }
+  },
+  {
+    "Name": "block cap",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 999999998,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Block",
+          "Target": "p",
+          "Source": "Block",
+          "Amount": 20
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "BlockGained": 1,
+        "FinalBlock": 999999999
+      }
+    }
+  },
+  {
+    "Name": "two actors isolated",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        },
+        {
+          "Id": "q",
+          "Name": "Teammate",
+          "Hp": 40,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [
+            {
+              "Kind": "Reduction",
+              "Value": 1,
+              "Charges": 0,
+              "Source": "Reduction"
+            }
+          ],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 9
+        },
+        {
+          "Kind": "Damage",
+          "Target": "q",
+          "Source": "Damage",
+          "Amount": 9
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 9
+      },
+      "q": {
+        "HpLost": 8
+      }
+    }
+  },
+  {
+    "Name": "unknown effect retained",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [],
+      "Warnings": [
+        "Unknown incoming effect"
+      ],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "FinalHp": 30
+      }
+    }
+  },
+  {
+    "Name": "attack cancelled when all enemies dead",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        },
+        {
+          "Id": "e",
+          "Name": "Enemy",
+          "Hp": 0,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": false
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 40,
+          "StopWhenNoEnemies": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": [
+        "e"
+      ]
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 0
+      }
+    }
+  },
+  {
+    "Name": "clear block",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 20,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "ClearBlock",
+          "Target": "p",
+          "Source": "ClearBlock",
+          "Amount": 0
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 4
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 4,
+        "FinalBlock": 0
+      }
+    }
+  },
+  {
+    "Name": "block gained fractional floors",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 30,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Block",
+          "Target": "p",
+          "Source": "Block",
+          "Amount": 3.9
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Damage",
+          "Amount": 4
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 1,
+        "BlockGained": 3
+      }
+    }
+  },
+  {
+    "Name": "two lethal events stop at first without revive",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 5,
+          "MaxHp": 60,
+          "Block": 0,
+          "SharedBlockOwner": null,
+          "RedirectPoweredAttacksTo": null,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "A",
+          "Amount": 9
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "B",
+          "Amount": 20
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": {
+        "HpLost": 5,
+        "FirstLethalSource": "A"
+      }
+    }
+  }
+]

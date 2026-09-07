@@ -3,22 +3,39 @@ using Godot;
 using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using System;
+using System.Collections.Generic;
 
 namespace BetterSpire2.UI;
 
 public static partial class SettingsMenu
 {
-    private static readonly Color PanelBackgroundColor = new(0.1f, 0.1f, 0.15f, 0.95f);
-    private static readonly Color PanelBorderColor = new(0.8f, 0.6f, 0.2f);
-    private static readonly Color AccentColor = new(0.9f, 0.7f, 0.2f);
-    private static readonly Color SecondaryTextColor = new(0.9f, 0.9f, 0.9f);
-    private static readonly Color MutedTextColor = new(0.5f, 0.5f, 0.5f);
+    private static readonly Color PanelBackgroundColor = HudTheme.Background;
+    private static readonly Color SurfaceColor = HudTheme.Surface;
+    private static readonly Color RaisedSurfaceColor = HudTheme.Raised;
+    private static readonly Color PanelBorderColor = HudTheme.AccentBorder;
+    private static readonly Color SubtleBorderColor = HudTheme.Border;
+    private static readonly Color AccentColor = HudTheme.Accent;
+    private static readonly Color SecondaryTextColor = HudTheme.Text;
+    private static readonly Color MutedTextColor = HudTheme.Muted;
+    private static readonly Color DangerColor = HudTheme.Danger;
+    private static readonly Color SuccessColor = HudTheme.Success;
+
+    private static readonly Dictionary<ModSettingSectionId, Button> _tabButtons = new();
 
     private static PanelContainer? _panel;
     private static CanvasLayer? _canvasLayer;
+    private static Control? _dragHandle;
+    private static VBoxContainer? _contentRoot;
+    private static Label? _statusLabel;
+    private static Viewport? _viewport;
+    private static VBoxContainer? _outerRoot;
+    private static ScrollContainer? _settingsScroll;
+    private static DeferredHudLayout? _autoFit;
+    private static Vector2 _settingsAnchor = new(.5f, .5f);
+    private static DockableOverlayController? _layoutController;
+    private static ModSettingSectionId _activeSection = ModSettingSectionId.Combat;
     private static bool _isVisible;
-    private static bool _isDragging;
-    private static Vector2 _dragOffset;
+    internal static bool IsVisible => _isVisible;
 
     public static void Toggle()
     {
@@ -32,20 +49,20 @@ public static partial class SettingsMenu
         }
     }
 
-    public static void HandleMouseInput(InputEvent @event)
+    public static bool HandleMouseInput(InputEvent inputEvent)
     {
-        if (!_isVisible || !UiHelpers.IsValid(_panel))
-        {
-            return;
-        }
+        if (!_isVisible) return false;
+        bool active = _layoutController?.IsInteracting == true;
+        _layoutController?.HandleInput(inputEvent);
+        return active || _layoutController?.IsInteracting == true;
+    }
+    internal static void ResetPointerCursor() => _layoutController?.ResetPointerCursor();
 
-        if (@event is InputEventMouseButton inputEventMouseButton && inputEventMouseButton.ButtonIndex == MouseButton.Left)
+    internal static void HandleOutsideClick(Vector2 point)
+    {
+        if (_isVisible && !IsPointInPanel(point))
         {
-            HandleMouseButton(inputEventMouseButton);
-        }
-        else if (@event is InputEventMouseMotion inputEventMouseMotion && _isDragging)
-        {
-            _panel!.Position = inputEventMouseMotion.Position - _dragOffset;
+            Hide();
         }
     }
 
@@ -56,7 +73,10 @@ public static partial class SettingsMenu
 
     public static void Hide()
     {
-        PersistPosition();
+        _autoFit?.Dispose(); _autoFit = null;
+        _layoutController?.Persist();
+        _layoutController?.Dispose();
+        _layoutController = null;
 
         if (UiHelpers.IsValid(_canvasLayer))
         {
@@ -65,18 +85,18 @@ public static partial class SettingsMenu
 
         _canvasLayer = null;
         _panel = null;
+        _dragHandle = null;
+        _contentRoot = null;
+        _statusLabel = null;
+        _viewport = null;
+        _outerRoot = null; _settingsScroll = null;
+        _tabButtons.Clear();
+        _settingBindings.Clear();
+        _partyRoot = null; _partyStamp = "";
         _isVisible = false;
-        _isDragging = false;
     }
 
-    private static void UpdateSetting(Action applyChange, Action? afterSave = null)
-    {
-        applyChange();
-        ModSettings.Save();
-        afterSave?.Invoke();
-    }
-
-    private static void RefreshIntents()
+    internal static void RefreshIntents()
     {
         try
         {
@@ -86,17 +106,34 @@ public static partial class SettingsMenu
                 return;
             }
 
-            foreach (Node child in instance.GetChildren())
-            {
-                if (child is NCreature nCreature)
-                {
-                    nCreature.RefreshIntents();
-                }
-            }
+            foreach (NCreature creature in instance.CreatureNodes)
+                if (UiHelpers.IsValid(creature)) creature.RefreshIntents();
         }
         catch (Exception ex)
         {
             ModLog.Error("SettingsMenu.RefreshIntents", ex);
         }
     }
+
+    private static void ApplyButtonStyle(Button button, bool selected = false, bool danger = false)
+        => HudTheme.StyleButton(button, selected, danger);
+
+    private static void ShowStatus(string text, bool success = true)
+    {
+        if (!UiHelpers.IsValid(_statusLabel))
+        {
+            return;
+        }
+
+        _statusLabel!.Text = text;
+        _statusLabel.Visible = text.Length > 0;
+        _statusLabel.AddThemeColorOverride("font_color", success ? SuccessColor : DangerColor);
+        _autoFit?.Request();
+    }
+    internal static void CancelPointerInteraction()
+    {
+        if (_layoutController?.IsInteracting == true) _layoutController.Persist();
+        _layoutController?.CancelInteraction();
+    }
+
 }

@@ -5,18 +5,22 @@
     <TargetFramework>net9.0</TargetFramework>
   </PropertyGroup>
   <PropertyGroup>
-    <LangVersion>preview</LangVersion>
+    <LangVersion>13</LangVersion>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <CheckForOverflowUnderflow>False</CheckForOverflowUnderflow>
   </PropertyGroup>
   <PropertyGroup>
     <ModId>BetterSpire2Lite</ModId>
-    <ModName>BetterSpire2 Lite</ModName>
+    <ModName>BetterSpire Guardian</ModName>
     <ModAuthor>jdr, MindLated</ModAuthor>
-    <ModDescription>QoL display mod: incoming damage totals, multi-hit labels, hand viewer, skip splash. Safe for multiplayer.</ModDescription>
+    <ModDescription>Compact borderless hand thumbnails (F3), auto-fitted settings (F1), shared HUD controls, coexisting draggable damage meter (F6), poison attribution and journal (F5). Source preview, compilation and in-game validation required.</ModDescription>
     <ModForkedFrom>https://www.nexusmods.com/slaythespire2/mods/2</ModForkedFrom>
-    <ModVersion>v2.0</ModVersion>
+    <ModVersion>3.5.3-compact-hud-preview</ModVersion>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="tests/**/*.cs" />
+  </ItemGroup>
 
   <Target Name="GenerateModManifest" AfterTargets="Build" Condition="'$(DesignTimeBuild)' != 'true'">
     <ItemGroup>
@@ -38,13 +42,16 @@
 
   <ItemGroup>
     <Reference Include="GodotSharp">
-      <HintPath>GodotSharp.dll</HintPath>
+      <HintPath>references/GodotSharp.dll</HintPath>
+      <Private>false</Private>
     </Reference>
     <Reference Include="sts2">
-      <HintPath>sts2.dll</HintPath>
+      <HintPath>references/sts2.dll</HintPath>
+      <Private>false</Private>
     </Reference>
     <Reference Include="0Harmony">
-      <HintPath>0Harmony.dll</HintPath>
+      <HintPath>references/0Harmony.dll</HintPath>
+      <Private>false</Private>
     </Reference>
   </ItemGroup>
 </Project>

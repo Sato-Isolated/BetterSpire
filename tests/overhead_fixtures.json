@@ -1,0 +1,625 @@
+[
+  {
+    "Name": "70 HP minus 36 HP",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "p",
+          "Hp": 70,
+          "MaxHp": 100,
+          "Block": 0
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Fixture Damage",
+          "Amount": 36
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p"
+    },
+    "Expected": [
+      {
+        "Actor": "p",
+        "Text": "34 (36)",
+        "Severity": "Loss",
+        "DangerVisible": true
+      }
+    ]
+  },
+  {
+    "Name": "Future relic block counts before attack",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "p",
+          "Hp": 70,
+          "MaxHp": 100,
+          "Block": 0
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Block",
+          "Target": "p",
+          "Source": "Fixture Block",
+          "Amount": 10
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Fixture Damage",
+          "Amount": 36
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p"
+    },
+    "Expected": [
+      {
+        "Actor": "p",
+        "Text": "44 (26)",
+        "Severity": "Loss",
+        "DangerVisible": true
+      }
+    ]
+  },
+  {
+    "Name": "Fully blocked incoming 36",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "p",
+          "Hp": 70,
+          "MaxHp": 100,
+          "Block": 36
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Fixture Damage",
+          "Amount": 36
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p"
+    },
+    "Expected": [
+      {
+        "Actor": "p",
+        "Text": "70 (0)",
+        "Severity": "Normal",
+        "DangerVisible": false
+      }
+    ]
+  },
+  {
+    "Name": "Multi-hit block depletion",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "p",
+          "Hp": 70,
+          "MaxHp": 100,
+          "Block": 20
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Fixture Damage",
+          "Amount": 12
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Fixture Damage",
+          "Amount": 12
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Fixture Damage",
+          "Amount": 12
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p"
+    },
+    "Expected": [
+      {
+        "Actor": "p",
+        "Text": "54 (16)",
+        "Severity": "Loss",
+        "DangerVisible": true
+      }
+    ]
+  },
+  {
+    "Name": "Buffer prevents only first hit",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "p",
+          "Hp": 70,
+          "MaxHp": 100,
+          "Block": 0,
+          "HpRules": [
+            {
+              "Kind": "Buffer",
+              "Value": 0,
+              "Charges": 1
+            }
+          ]
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Fixture Damage",
+          "Amount": 18
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Fixture Damage",
+          "Amount": 18
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p"
+    },
+    "Expected": [
+      {
+        "Actor": "p",
+        "Text": "52 (18)",
+        "Severity": "Loss",
+        "DangerVisible": true
+      }
+    ]
+  },
+  {
+    "Name": "HP reduction applies before readout",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "p",
+          "Hp": 70,
+          "MaxHp": 100,
+          "Block": 0,
+          "HpRules": [
+            {
+              "Kind": "Reduction",
+              "Value": 1
+            }
+          ]
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Fixture Damage",
+          "Amount": 36
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p"
+    },
+    "Expected": [
+      {
+        "Actor": "p",
+        "Text": "35 (35)",
+        "Severity": "Loss",
+        "DangerVisible": true
+      }
+    ]
+  },
+  {
+    "Name": "Healing does not erase damage total",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "p",
+          "Hp": 70,
+          "MaxHp": 100,
+          "Block": 0
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Fixture Damage",
+          "Amount": 36
+        },
+        {
+          "Kind": "Heal",
+          "Target": "p",
+          "Source": "Fixture Heal",
+          "Amount": 8
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p"
+    },
+    "Expected": [
+      {
+        "Actor": "p",
+        "Text": "42 (36)",
+        "Severity": "Loss",
+        "DangerVisible": true
+      }
+    ]
+  },
+  {
+    "Name": "Overkill is not negative HP",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "p",
+          "Hp": 70,
+          "MaxHp": 100,
+          "Block": 0
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Fixture Damage",
+          "Amount": 90
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p"
+    },
+    "Expected": [
+      {
+        "Actor": "p",
+        "Text": "0 (70)",
+        "Severity": "Lethal",
+        "DangerVisible": true
+      }
+    ]
+  },
+  {
+    "Name": "Revive can make total loss exceed starting HP",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "p",
+          "Hp": 70,
+          "MaxHp": 100,
+          "Block": 0,
+          "ReviveHp": 40
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Fixture Damage",
+          "Amount": 90
+        },
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Fixture Damage",
+          "Amount": 5
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p"
+    },
+    "Expected": [
+      {
+        "Actor": "p",
+        "Text": "35 (75)",
+        "Severity": "Uncertain",
+        "DangerVisible": true
+      }
+    ]
+  },
+  {
+    "Name": "Unknown zero is not safe",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "p",
+          "Hp": 70,
+          "MaxHp": 100,
+          "Block": 0
+        }
+      ],
+      "Events": [],
+      "Warnings": [
+        "Unknown interaction"
+      ],
+      "LocalPlayerId": "p"
+    },
+    "Expected": [
+      {
+        "Actor": "p",
+        "Text": "70 (0)",
+        "Severity": "Uncertain",
+        "DangerVisible": true
+      }
+    ]
+  },
+  {
+    "Name": "Partial loss uses amber without suffix",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "p",
+          "Hp": 70,
+          "MaxHp": 100,
+          "Block": 0
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Fixture Damage",
+          "Amount": 36
+        }
+      ],
+      "Warnings": [
+        "Unknown interaction"
+      ],
+      "LocalPlayerId": "p"
+    },
+    "Expected": [
+      {
+        "Actor": "p",
+        "Text": "34 (36)",
+        "Severity": "Uncertain",
+        "DangerVisible": true
+      }
+    ]
+  },
+  {
+    "Name": "Partial lethal stays red",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "p",
+          "Hp": 70,
+          "MaxHp": 100,
+          "Block": 0
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Fixture Damage",
+          "Amount": 90
+        }
+      ],
+      "Warnings": [
+        "Unknown interaction"
+      ],
+      "LocalPlayerId": "p"
+    },
+    "Expected": [
+      {
+        "Actor": "p",
+        "Text": "0 (70)",
+        "Severity": "Lethal",
+        "DangerVisible": true
+      }
+    ]
+  },
+  {
+    "Name": "Coop values are not copied from local player",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "p",
+          "Hp": 70,
+          "MaxHp": 100,
+          "Block": 0
+        },
+        {
+          "Id": "mate",
+          "Name": "mate",
+          "Hp": 55,
+          "MaxHp": 100,
+          "Block": 2
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Fixture Damage",
+          "Amount": 36
+        },
+        {
+          "Kind": "Damage",
+          "Target": "mate",
+          "Source": "Fixture Damage",
+          "Amount": 10
+        }
+      ],
+      "Warnings": [
+        "Coop is conditional"
+      ],
+      "LocalPlayerId": "p"
+    },
+    "Expected": [
+      {
+        "Actor": "p",
+        "Text": "34 (36)",
+        "Severity": "Uncertain",
+        "DangerVisible": true
+      },
+      {
+        "Actor": "mate",
+        "Text": "47 (8)",
+        "Severity": "Uncertain",
+        "DangerVisible": true
+      }
+    ]
+  },
+  {
+    "Name": "Osty and owner use distinct HP pools",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "p",
+          "Hp": 70,
+          "MaxHp": 100,
+          "Block": 0,
+          "RedirectPoweredAttacksTo": "pet"
+        },
+        {
+          "Id": "pet",
+          "Name": "pet",
+          "Hp": 20,
+          "MaxHp": 100,
+          "Block": 0,
+          "SharedBlockOwner": "p"
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Fixture Damage",
+          "Amount": 36,
+          "PoweredAttack": true
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p"
+    },
+    "Expected": [
+      {
+        "Actor": "p",
+        "Text": "54 (16)",
+        "Severity": "Loss",
+        "DangerVisible": true
+      },
+      {
+        "Actor": "pet",
+        "Text": "0 (20)",
+        "Severity": "Lethal",
+        "DangerVisible": true
+      }
+    ]
+  },
+  {
+    "Name": "Healing-only result",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "p",
+          "Hp": 70,
+          "MaxHp": 100,
+          "Block": 0
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Heal",
+          "Target": "p",
+          "Source": "Fixture Heal",
+          "Amount": 8
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p"
+    },
+    "Expected": [
+      {
+        "Actor": "p",
+        "Text": "78 (0)",
+        "Severity": "Normal",
+        "DangerVisible": false
+      }
+    ]
+  },
+  {
+    "Name": "No attack still shows current HP",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "p",
+          "Hp": 70,
+          "MaxHp": 100,
+          "Block": 0
+        }
+      ],
+      "Events": [],
+      "Warnings": [],
+      "LocalPlayerId": "p"
+    },
+    "Expected": [
+      {
+        "Actor": "p",
+        "Text": "70 (0)",
+        "Severity": "Normal",
+        "DangerVisible": false
+      }
+    ]
+  },
+  {
+    "Name": "Long numbers keep full loss text",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "p",
+          "Hp": 123456,
+          "MaxHp": 123456,
+          "Block": 0
+        }
+      ],
+      "Events": [
+        {
+          "Kind": "Damage",
+          "Target": "p",
+          "Source": "Fixture Damage",
+          "Amount": 6
+        }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p"
+    },
+    "Expected": [
+      {
+        "Actor": "p",
+        "Text": "123450 (6)",
+        "Severity": "Loss",
+        "DangerVisible": true
+      }
+    ]
+  }
+]

@@ -59,3 +59,9 @@ Thumbs.db
 # Local environment files
 .env
 .env.*
+
+# Guardian generated build/audit caches
+build.log
+__pycache__/
+*.pyc
+dist/

@@ -15,8 +15,8 @@ internal static class CombatManager_LoseCombat_Patch
     private static void Prefix()
     {
         DamageTracker.Hide();
-        DeckTracker.Hide();
-        TurnSummaryTracker.Hide();
+        TeammateHandViewer.Hide();
+        JournalController.OnCombatEnding(true);
         InstantSpeedHelper.OnCombatEnd();
     }
 }

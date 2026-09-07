@@ -9,8 +9,6 @@ namespace BetterSpire2.Patches.UI;
 [HarmonyPatch(typeof(NGame), "LaunchMainMenu")]
 internal static class NGame_LaunchMainMenu_Patch
 {
-
-
     [HarmonyPrefix]
     private static void Prefix(ref bool skipLogo)
     {
@@ -24,6 +22,7 @@ internal static class NGame_LaunchMainMenu_Patch
     [HarmonyPostfix]
     private static void Postfix()
     {
+        ClockDisplay.SyncVisibility();
         if (ModSettings.InstantFastMode)
         {
             ModLog.Info("Instant Fast Mode enabled (combat-only)");

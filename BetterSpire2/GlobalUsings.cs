@@ -6,3 +6,6 @@ global using BetterSpire2.Patches.Map;
 global using BetterSpire2.Patches.UI;
 global using BetterSpire2.Trackers;
 global using BetterSpire2.UI;
+global using BetterSpire2.Runtime;
+global using BetterSpire2.Journal.Game;
+global using BetterSpire2.HandViewer;

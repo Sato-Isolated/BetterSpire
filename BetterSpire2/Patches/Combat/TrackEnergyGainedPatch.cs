@@ -43,7 +43,7 @@ internal static class PlayerCombatState_GainEnergy_Patch
             int gainedAmount = Math.Max(0, __instance.Energy - __state);
             if (gainedAmount > 0)
             {
-                TurnSummaryTracker.RecordEnergyGained(creature, gainedAmount);
+                JournalController.RecordEnergyGained(creature, gainedAmount);
             }
         }
         catch (Exception ex)

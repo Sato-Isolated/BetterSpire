@@ -17,7 +17,17 @@ public static class PartyManager
 
     private static readonly MethodInfo _clearForPlayer = AccessTools.Method(typeof(NMapDrawings), "ClearAllLinesForPlayer");
 
-    private static readonly MethodInfo _clearAll = AccessTools.Method(typeof(NMapDrawings), "ClearAllLines");
+    internal static long Revision { get; private set; }
+    private static NMapDrawings? CurrentDrawings
+    {
+        get
+        {
+            var screen = NMapScreen.Instance;
+            var current = UiHelpers.IsValid(screen) ? screen!.Drawings : null;
+            return UiHelpers.IsValid(current) ? current : UiHelpers.IsValid(MapDrawings) ? MapDrawings : null;
+        }
+    }
+    internal static bool CanClearDrawings => CurrentDrawings != null;
 
     public static bool IsDrawingMuted(ulong netId)
     {
@@ -26,6 +36,7 @@ public static class PartyManager
 
     public static void ToggleDrawingMute(ulong netId)
     {
+        Revision++;
         if (!_mutedDrawings.Remove(netId))
         {
             _mutedDrawings.Add(netId);
@@ -36,15 +47,16 @@ public static class PartyManager
     {
         try
         {
-            if (MapDrawings == null || _getDrawingState == null || _clearForPlayer == null)
+            var drawings = CurrentDrawings;
+            if (drawings == null || _getDrawingState == null || _clearForPlayer == null)
             {
                 return;
             }
 
-            object? drawingState = _getDrawingState.Invoke(MapDrawings, new object[] { netId });
+            object? drawingState = _getDrawingState.Invoke(drawings, new object[] { netId });
             if (drawingState != null)
             {
-                _clearForPlayer.Invoke(MapDrawings, new object[] { drawingState });
+                _clearForPlayer.Invoke(drawings, new object[] { drawingState });
             }
         }
         catch (Exception ex)
@@ -57,12 +69,7 @@ public static class PartyManager
     {
         try
         {
-            if (MapDrawings == null || _clearAll == null)
-            {
-                return;
-            }
-
-            _clearAll.Invoke(MapDrawings, null);
+            CurrentDrawings?.ClearAllLines();
         }
         catch (Exception ex)
         {
@@ -73,5 +80,6 @@ public static class PartyManager
     public static void ClearMutes()
     {
         _mutedDrawings.Clear();
+        Revision++;
     }
 }
