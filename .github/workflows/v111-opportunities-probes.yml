@@ -1,0 +1,64 @@
+name: Probe v111 forecast discrepancies
+on:
+  push:
+    branches: [audit/v111-native-opportunities]
+    paths: ['.github/workflows/v111-opportunities-probes.yml']
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
+        with:
+          dotnet-version: 9.0.x
+      - name: Run unmodified production simulator on targeted scenarios
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/forecast-probe
+          cp BetterSpire2/Guardian/Core/ForecastSimulator.cs BetterSpire2/Guardian/Core/ForecastModels.cs /tmp/forecast-probe/
+          cat > /tmp/forecast-probe/Probe.csproj <<'EOF'
+          <Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net9.0</TargetFramework><Nullable>enable</Nullable></PropertyGroup></Project>
+          EOF
+          cat > /tmp/forecast-probe/Program.cs <<'EOF'
+          using System;
+          using System.Linq;
+          using System.Text.Json;
+          using BetterSpire2.Guardian.Core;
+          static object Probe(string name, int petHp, HpRule rule, decimal[] hits, int expectedHp)
+          {
+              var input = new ForecastInput(new ActorSnapshot[] {
+                  new("player", "Player", 50, 50, 0, RedirectPoweredAttacksTo: "osty", HpRules: new[]{rule}, IsPlayer: true),
+                  new("osty", "Osty", petHp, petHp, 0, SharedBlockOwner: "player")
+              }, hits.Select(x => new ForecastEvent(ForecastEventKind.Damage, "player", "Enemy", x, PoweredAttack: true)).ToArray(), Array.Empty<string>(), "player");
+              var actual = ForecastSimulator.Run(input);
+              return new { Case = name, ExpectedPlayerHpFromInspectedNativeSemantics = expectedHp,
+                  ActualProductionSimulatorPlayerHp = actual.Local.FinalHp,
+                  Mismatch = actual.Local.FinalHp != expectedHp, actual.Steps };
+          }
+          var result = new {
+              Scope = "Runs unmodified BetterSpire production simulator, NOT the game engine. Expected values derive from v111 CreatureCmd.Damage dispatch and relic/power handlers.",
+              Cases = new[] {
+                  Probe("BeatingRemnant_Osty50_hits20_40", 50, new(HpRuleKind.TurnLimit, 20, Source:"BeatingRemnant"), new decimal[]{20,40}, 40),
+                  Probe("Slippery1_Osty10_hits5_10", 10, new(HpRuleKind.Slippery, 1, 1, "Slippery"), new decimal[]{5,10}, 49)
+              }
+          };
+          string json = JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
+          Console.WriteLine(json);
+          System.IO.File.WriteAllText("/tmp/forecast-probe/probe-results.json", json);
+          EOF
+          dotnet run --project /tmp/forecast-probe/Probe.csproj --configuration Release
+          git rev-parse HEAD > /tmp/forecast-probe/source-commit.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v111-forecast-discrepancy-probes
+          path: |
+            /tmp/forecast-probe/probe-results.json
+            /tmp/forecast-probe/source-commit.txt
+          retention-days: 7
+          if-no-files-found: error
