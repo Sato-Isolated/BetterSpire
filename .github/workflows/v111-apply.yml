@@ -1,0 +1,40 @@
+name: Apply and validate v111 journal
+on:
+  push:
+    branches: [fix/v111-native-journal-meter]
+    paths: ['.github/workflows/v111-apply.yml']
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.ref == 'refs/heads/fix/v111-native-journal-meter'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Verify reviewed patch and apply
+        run: |
+          cat .github/migrations/stage1.*.b64 | base64 --decode | gzip --decompress > /tmp/v111.patch
+          echo '1fc00899d82b785c99fce9f4615223edb46c07177442e3c248c9a45d069495e0  /tmp/v111.patch' | sha256sum --check
+          git apply --check /tmp/v111.patch
+          git apply /tmp/v111.patch
+          git diff --check
+      - name: Verify new journal invariants
+        run: dotnet run --project tests/NativeJournal.Core.Tests.csproj --configuration Release
+      - name: Build and validate full mod
+        run: bash build.sh
+      - name: Commit verified sources on the working branch only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add BetterSpire2 tests
+          git commit -m 'feat: native journal lifecycle, exact damage attribution and bounded combat timeline'
+          git push origin HEAD:refs/heads/fix/v111-native-journal-meter
+          git rev-parse HEAD >> dist/BetterSpire2Lite/BUILD-SUCCESS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BetterSpire-v111-native-journal
+          path: dist/BetterSpire2Lite/
+          if-no-files-found: error
