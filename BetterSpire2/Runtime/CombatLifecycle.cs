@@ -61,7 +61,11 @@ internal static class CombatLifecycle
         ForgetCombat();
     }
 
-    internal static void ForgetCombat() { _state = null; _combatId = null; }
+    internal static void ForgetCombat()
+    {
+        _state = null; _combatId = null;
+        Native.NativeCombatHooks.ForgetCombat();
+    }
 
     internal static void Stop()
     {

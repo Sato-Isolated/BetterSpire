@@ -188,3 +188,14 @@ namespace HarmonyLib
                 null, parameters, null);
     }
 }
+
+namespace BetterSpire2.Runtime.Native
+{
+    internal static class NativeCombatHooks
+    {
+        internal static event Action<MegaCrit.Sts2.Core.Combat.CombatState>? StateChanged;
+        internal static int Subscribers => StateChanged?.GetInvocationList().Length ?? 0;
+        internal static void Publish(MegaCrit.Sts2.Core.Combat.CombatState state) => StateChanged?.Invoke(state);
+        internal static void ForgetCombat() { }
+    }
+}

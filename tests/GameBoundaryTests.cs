@@ -116,6 +116,10 @@ internal static class GameBoundaryTests
         Check(manager.StateTracker.SubscriberCount == 1 && manager.ReadySubscribers == 1 && manager.UndoSubscribers == 1,
             "native state and both ready events attached");
         int before = changes;
+        Check(BetterSpire2.Runtime.Native.NativeCombatHooks.Subscribers == 1, "native hook observer subscribed once");
+        BetterSpire2.Runtime.Native.NativeCombatHooks.Publish(state);
+        Check(changes == before + 1, "coalesced native hooks invalidate forecasts");
+        before = changes;
         creature.ChangeHp(10, 9);
         Check(changes == before + 1, "immediate stale fence before deferred tracker");
         before = changes; card.ChangeCost(); card.Forge();
@@ -155,6 +159,7 @@ internal static class GameBoundaryTests
         manager.StateTracker.Publish(state); manager.Ready(player); manager.Undo(player); card.Forge(); creature.ChangeHp(9, 8);
         Check(changes == before && manager.StateTracker.SubscriberCount == 0 && manager.ReadySubscribers == 0 && manager.UndoSubscribers == 0,
             "dispose detaches native and direct signals");
+        Check(BetterSpire2.Runtime.Native.NativeCombatHooks.Subscribers == 0, "native hook observer detached");
         TestMode.IsOn = true;
         observer.Observe(state);
         Check(manager.StateTracker.SubscriberCount == 0, "backend TestMode must not subscribe to native UI tracker");

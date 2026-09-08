@@ -2,7 +2,7 @@
 
 A native C# / Godot mod for **Slay the Spire 2**, with incoming-damage forecasts, a compact teammate hand viewer, a combat journal, and a movable damage meter.
 
-The mod ID and output filenames remain `BetterSpire2Lite`. The current manifest version is `3.6.1-v111` and requires Slay the Spire 2 v0.111.0 or newer.
+The mod ID and output filenames remain `BetterSpire2Lite`. The current manifest version is `3.6.2-v111` and requires Slay the Spire 2 v0.111.0 or newer.
 
 ## Features
 
@@ -65,7 +65,7 @@ Or from a Bash environment with the SDK installed:
 bash build.sh
 ```
 
-Both scripts run nine C# behavior suites, compile the mod, and then verify the v0.111 metadata and IL call contracts. The game-boundary suite links the actual lifecycle, observer, victory resolver and turn-order source against test doubles; it does not run the game engine. Successful builds produce:
+Both scripts run ten C# behavior suites, compile the mod, and then verify the v0.111 metadata and IL call contracts. The game-boundary suite links the actual lifecycle, observer, victory resolver and turn-order source against test doubles; it does not run the game engine. Successful builds produce:
 
 ```text
 dist/BetterSpire2Lite/
@@ -118,6 +118,58 @@ dotnet run --project tests/Hud.Core.Tests.csproj --configuration Release
 
 The build scripts verify the behavior suites, v0.111 metadata contract, and mod compilation. These checks do not validate Godot rendering or actual game input. In-game verification remains necessary, particularly for overlay interactions, scaling, and compatibility with other mods.
 
+## Focused update 3.6.2-v111
+
+Only the selected Guardian corrections and native hook observer are included; no new
+panels, support metrics, card ranking, multi-run/profile system or replay UI were added.
+
+Guardian now dispatches its post-damage counters to each actual receiver, in the order
+of v111 `CreatureCmd.Damage` results. Osty's HP loss no longer consumes the player's
+Beating Remnant allowance or Slippery charge. Pet-side charges and counters are updated
+on the pet; the player's counters see only actual overflow. Dead receivers are skipped,
+while supported revived receivers receive their reaction. An old fixture that encoded
+the incorrect original-target assumption has been corrected and documented by the new
+Osty tests. Expected values are derived from inspected native methods; these tests do
+not execute the game engine.
+
+The audited `BurningBlood.AfterCombatVictory` heal is classified as outside the current
+end-turn/enemy-turn forecast window. This exception applies only after verifying a
+base-game type. Unknown hooks, external models and other victory reactions still mark
+the forecast uncertain. The exception is not a generic victory-hook allowlist.
+
+A sealed `BetterSpireCombatObserver` is supplied through
+`ModHelper.SubscribeForCombatStateHooks` once per process. The native `ModelDb` discovers
+its canonical model normally; the provider uses a mutable clone for each live combat.
+There is no late model injection and no run-hook registration (run listeners already
+include the combat listeners). It overrides thirteen notification hooks, not gameplay
+modifiers. It has no saved properties, adds no cards/powers/relics, sends no messages,
+never mutates arguments or a choice-context stack, and never invokes commands or RNG.
+Its callbacks only set a coalesced dirty flag and return `Task.CompletedTask`.
+
+The heartbeat delivers those notifications outside the native hook stack to Guardian
+and the existing journal. The journal continues reading native history through its
+single cursor; hooks do not append totals. Combat state, manager, ID and observer identity
+fences reject old callbacks after reset, replacement or stop/restart. The provider becomes
+inert on Stop because v111 has no unsubscribe API. A missing model or registration fault
+disables this supplemental observer; original events/history stay active. Registration
+and callback errors are reported outside native hook execution.
+
+The exact sealed observer is exempted from Guardian's external-model warning, not the
+whole mod assembly. The existing healing, block-clear, energy, early-history and poison
+patches remain: the inspected hook timings/parameters do not prove equivalent capture.
+In particular, native HP-change notifications are not interpreted as effective healing.
+
+New tests cover receiver-specific defense budgets, independent integer cases, scope
+replacement, coalescing, synchronously completed callbacks, unchanged hook arguments,
+consumer failure isolation, native event-plus-hook cursor deduplication, startup and
+teardown. Native metadata contracts validate all thirteen hook signatures, the canonical
+model access, subscription/detachment and the absence of saved properties/extra modifiers.
+The non-gameplay manifest flag is retained: the native content sorter places non-gameplay
+models after gameplay IDs and excludes them from its gameplay hash. Actual interoperability
+with mixed host/client mod sets still requires in-game verification; no multiplayer or FPS
+certification is implied by these tests. Model-dependent packet-width thresholds remain a
+reason to test combinations with other mods.
+
 ## Native migration 3.6.1-v111
 
 The v0.111 reference assembly was inspected with ILSpy without executing the game.
@@ -157,7 +209,7 @@ Sly and other unsupported effects still produce partial forecasts. This update d
 execute native kill/end-turn/RNG commands or claim to simulate every card interaction.
 Intent label updates use native `SetTextAutoSize`.
 
-Both scripts run nine behavior suites, compile the mod, then check metadata/IL contracts
+Both scripts run ten behavior suites, compile the mod, then check metadata/IL contracts
 including visibility, return types, event signatures, preview clone boundaries and absence
 of journal debug polling. These checks do not certify Godot rendering, host/client input,
 multiplayer synchronization or FPS. Test in-game F3 targeting with enchanted cards, F5 across
@@ -167,7 +219,7 @@ ready/undo and overlay scaling. Back up settings/journal before testing a new bu
 ## Repository layout
 
 - `BetterSpire2/` — mod implementation, feature modules, UI, and game patches.
-- `tests/` — nine C# behavior projects, the v0.111 API contract, and their JSON fixtures.
+- `tests/` — ten C# behavior projects, the v0.111 API contract, and their JSON fixtures.
 - `references/` — assemblies used for compilation.
 - `build.cmd`, `build.ps1`, `build.sh` — test and packaging entry points.
 

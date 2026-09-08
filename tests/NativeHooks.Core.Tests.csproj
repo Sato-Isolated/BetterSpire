@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net9.0</TargetFramework><LangVersion>13</LangVersion>
+    <Nullable>enable</Nullable><EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="NativeHooksTests.cs" />
+    <Compile Include="NativeHooksDoubles.cs" />
+    <Compile Include="../BetterSpire2/Runtime/Native/*.cs" Link="Native/%(Filename)%(Extension)" />
+    <Compile Include="../BetterSpire2/Guardian/Core/ForecastHookPolicy.cs" Link="ForecastHookPolicy.cs" />
+    <Compile Include="../BetterSpire2/Guardian/Game/CapabilityAudit.cs" Link="CapabilityAudit.cs" />
+    <Compile Include="../BetterSpire2/Journal/Core/HistoryCursor.cs" Link="HistoryCursor.cs" />
+  </ItemGroup>
+</Project>

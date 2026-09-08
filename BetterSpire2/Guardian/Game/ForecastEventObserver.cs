@@ -8,6 +8,7 @@ using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.TestSupport;
+using BetterSpire2.Runtime.Native;
 
 namespace BetterSpire2.Guardian.Game;
 
@@ -42,6 +43,7 @@ internal sealed class ForecastEventObserver : IDisposable
             _combatId = _manager.CurrentCombatId;
             _history = _manager.History;
             _history.Changed += Changed;
+            NativeCombatHooks.StateChanged += NativeStateChanged;
             // The game's tracker is a deferred UI notification, forbidden in backend
             // TestMode. Keep immediate signals below as a stale-display fence.
             if (!TestMode.IsOn)
@@ -217,6 +219,7 @@ internal sealed class ForecastEventObserver : IDisposable
     }
     public void Dispose()
     {
+        NativeCombatHooks.StateChanged -= NativeStateChanged;
         if (_history != null) _history.Changed -= Changed;
         if (_manager != null)
         {

@@ -59,6 +59,8 @@ internal static class Program
         catch (Exception ex) { failed++; Console.WriteLine("FAIL guards: " + ex.Message); }
         try { OverheadTests.Run(); passed++; Console.WriteLine("PASS overhead formatting, per-actor values and geometry"); }
         catch (Exception ex) { failed++; Console.WriteLine("FAIL overhead: " + ex.Message); }
+        try { OstyRegressionTests.Run(); passed++; Console.WriteLine("PASS Osty receiver-scoped reactions and forecast phase policy"); }
+        catch (Exception ex) { failed++; Console.WriteLine("FAIL Osty regression: " + ex.Message); }
         Console.WriteLine($"{passed} groups passed, {failed} failed.");
         return failed == 0 ? 0 : 1;
     }

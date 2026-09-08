@@ -9,6 +9,7 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="OverheadTests.cs" />
+    <Compile Include="OstyRegressionTests.cs" />
     <Compile Include="../BetterSpire2/Guardian/Core/*.cs" Link="Core/%(Filename)%(Extension)" />
     <None Include="fixtures.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="overhead_fixtures.json" CopyToOutputDirectory="PreserveNewest" />

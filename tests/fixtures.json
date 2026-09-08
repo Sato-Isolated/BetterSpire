@@ -1924,7 +1924,7 @@
     }
   },
   {
-    "Name": "redirect reaction uses original target and pet result",
+    "Name": "v111 redirect reactions use each real receiver",
     "Input": {
       "Actors": [
         {
@@ -1983,7 +1983,7 @@
     },
     "Expected": {
       "p": {
-        "HpLost": 12
+        "HpLost": 10
       },
       "pet": {
         "HpLost": 4
