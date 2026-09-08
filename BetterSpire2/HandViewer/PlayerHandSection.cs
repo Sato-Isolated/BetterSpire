@@ -206,12 +206,14 @@ public static partial class TeammateHandViewer
                 card.Upgraded += OnCardChanged; card.EnergyCostChanged += OnCardChanged;
                 card.StarCostChanged += OnCardChanged; card.EnchantmentChanged += OnCardChanged;
                 card.AfflictionChanged += OnCardChanged; card.KeywordsChanged += OnCardChanged;
+                card.Forged += OnCardChanged; card.ReplayCountChanged += OnCardChanged;
             }
             else
             {
                 card.Upgraded -= OnCardChanged; card.EnergyCostChanged -= OnCardChanged;
                 card.StarCostChanged -= OnCardChanged; card.EnchantmentChanged -= OnCardChanged;
                 card.AfflictionChanged -= OnCardChanged; card.KeywordsChanged -= OnCardChanged;
+                card.Forged -= OnCardChanged; card.ReplayCountChanged -= OnCardChanged;
             }
         }
         private void SyncCardSubscriptions(IReadOnlyList<CardModel> cards)
@@ -241,13 +243,7 @@ public static partial class TeammateHandViewer
             if (ModSettings.CompactHandViewer || _cardRow == null)
             { UnsubscribeCardUpgrades(); return; }
             SyncCardSubscriptions(cards);
-            foreach (var card in cards) TryUpdateDynamicVarPreview(card);
             SyncCards(cards);
-        }
-        private void TryUpdateDynamicVarPreview(CardModel card)
-        {
-            try { card.UpdateDynamicVarPreview(CardPreviewMode.Normal, null, card.DynamicVars); }
-            catch (Exception ex) { LogError(ex); }
         }
         private void RefreshStatus()
         {

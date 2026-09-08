@@ -136,7 +136,7 @@ public static class DamageTracker
         try
         {
             string path = Path.Combine(OS.GetUserDataDir(), "betterspire_guardian_forecast.json");
-            var dump = new { Version = "3.6.0-v111", GameModule = typeof(CombatState).Module.ModuleVersionId,
+            var dump = new { Version = "3.6.1-v111", GameModule = typeof(CombatState).Module.ModuleVersionId,
                 Forecast = _lastResult, Observed = new { Ledger.PlayerHpLost, Ledger.PlayerBlocked,
                     Ledger.PlayerBlockGained, Ledger.PetHpLost, Ledger.Recent } };
             File.WriteAllText(path, JsonSerializer.Serialize(dump, new JsonSerializerOptions { WriteIndented = true }));

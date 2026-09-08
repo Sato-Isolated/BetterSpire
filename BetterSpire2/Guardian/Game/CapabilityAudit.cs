@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using BetterSpire2.Guardian.Core;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Modding;
@@ -22,6 +23,7 @@ internal static class CapabilityAudit
         "AfterSideTurnEnd", "AfterSideTurnEndLate", "BeforeSideTurnStart", "AfterSideTurnStart",
         "BeforeDamageReceived", "AfterDamageReceived", "AfterCurrentHpChanged",
         "BeforeAttack", "AfterAttack", "ModifyAttackHitCount",
+        "BeforeDamageGiven", "AfterDamageGiven", "AfterDiedToDoom",
         "BeforeBlockGained", "AfterBlockGained", "AfterBlockBroken", "AfterBlockCleared",
         "BeforeDeath", "AfterDeath", "AfterAutoPostPlayPhaseEntered",
         "ShouldTakeExtraTurn", "AfterTakingExtraTurn",
@@ -73,7 +75,7 @@ internal static class CapabilityAudit
                 unknown = type.GetMethods(BindingFlags.Instance | BindingFlags.Public)
                     .Where(m => m.DeclaringType != typeof(AbstractModel) &&
                         m.GetBaseDefinition().DeclaringType == typeof(AbstractModel))
-                    .Where(m => TrackedHooks.Contains(m.Name) || m.Name.StartsWith("AfterModifying", StringComparison.Ordinal))
+                    .Where(m => TrackedHooks.Contains(m.Name) || ForecastHookPolicy.IsReaction(m.Name))
                     .Where(m => !IsSupported(type.Name, m.Name))
                     .Select(m => m.Name).Distinct().ToArray();
                 UnknownByType[type] = unknown;

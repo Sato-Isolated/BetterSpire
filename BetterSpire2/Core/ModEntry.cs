@@ -89,7 +89,7 @@ public class ModEntry
         PatchGroup(harmony, "UI", _uiPatches, ref succeeded, ref failed);
         PatchGroup(harmony, "Map", _mapPatches, ref succeeded, ref failed);
         ModLog.Info($"Harmony patching complete: {succeeded} succeeded, {failed} failed");
-        ModLog.Info("ModEntry.Init() complete — BetterSpire 3.6.0 for game v0.111");
+        ModLog.Info("ModEntry.Init() complete — BetterSpire 3.6.1 for game v0.111");
         ModRuntime.EnsureStarted();
         if (ModSettings.ShowClock)
         {

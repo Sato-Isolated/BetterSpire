@@ -2,7 +2,7 @@
 
 A native C# / Godot mod for **Slay the Spire 2**, with incoming-damage forecasts, a compact teammate hand viewer, a combat journal, and a movable damage meter.
 
-The mod ID and output filenames remain `BetterSpire2Lite`. The current manifest version is `3.6.0-v111` and requires Slay the Spire 2 v0.111.0 or newer.
+The mod ID and output filenames remain `BetterSpire2Lite`. The current manifest version is `3.6.1-v111` and requires Slay the Spire 2 v0.111.0 or newer.
 
 ## Features
 
@@ -65,7 +65,7 @@ Or from a Bash environment with the SDK installed:
 bash build.sh
 ```
 
-Both scripts run seven C# behavior suites, compile the mod, and then verify the v0.111 metadata and IL call contracts. The game-boundary suite links the actual lifecycle, observer, victory resolver and turn-order source against test doubles; it does not run the game engine. Successful builds produce:
+Both scripts run nine C# behavior suites, compile the mod, and then verify the v0.111 metadata and IL call contracts. The game-boundary suite links the actual lifecycle, observer, victory resolver and turn-order source against test doubles; it does not run the game engine. Successful builds produce:
 
 ```text
 dist/BetterSpire2Lite/
@@ -116,21 +116,59 @@ To run only the HUD suite:
 dotnet run --project tests/Hud.Core.Tests.csproj --configuration Release
 ```
 
-The behavior suites, v0.111 metadata contract, and mod compilation pass locally. These checks do not validate Godot rendering or actual game input. In-game verification remains necessary, particularly for overlay interactions, scaling, and compatibility with other mods.
+The build scripts verify the behavior suites, v0.111 metadata contract, and mod compilation. These checks do not validate Godot rendering or actual game input. In-game verification remains necessary, particularly for overlay interactions, scaling, and compatibility with other mods.
 
-The obsolete Python audit runner and duplicate Python reference models have been removed. Python is **not required** to build or test the mod. The optional `tools/cli_reader.py` utility remains available for inspecting .NET assembly metadata and IL without executing the assembly:
+## Native migration 3.6.1-v111
 
-```powershell
-python tools/cli_reader.py references/sts2.dll CombatManager
-python tools/cli_reader.py references/sts2.dll CombatManager --il
-```
+The v0.111 reference assembly was inspected with ILSpy without executing the game.
+Journal collection uses `RunManager.RunStarted` and cached `CombatSetUp` state. Debug
+reads remain only in one-time late initialization. Combat identity fences reject stale
+callbacks. Early victory and history-clear patches remain: history is cleared before
+`CombatWon` / `CombatEnded`. Private native getters stay behind cached reflection because
+the inspected DLL does not expose them publicly.
+
+The damage meter uses a dedicated damage revision, not every journal change. It counts
+observed enemy HP loss, optionally enemy block, never overkill. Pet damage is credited
+once to its owner. Missing owners stay unattributed. Percentages refer to attributed
+damage only. Poison shares use the observed stack-contribution convention; this is not
+claimed to be native individual ownership. One allocation supplies totals and trace,
+including rounding remainders. Hiding F6 does not stop collection.
+
+In **F5**, select a combat/round and cycle **Overview → Sources → Timeline**. Retained results
+have a sequence, phase, dealer, target, source, HP/block/overkill and attribution on hover.
+Trace limits are 2,048 results/combat, 8,192/run, plus a byte budget. Old trace pruning does
+not change totals and is labeled. Existing archives have no invented retrospective trace.
+Retry replaces the old combat branch. A native fatal-result flag does not rule out later
+resurrection/death-prevention hooks.
+
+HandViewer now uses unregistered presentation copies and native preview/description
+methods. Preview writes target detached variables while calculations retain the original
+card identity/owner. A cached reflection boundary strips event delegates from an unpublished
+shell before native deep cloning: v111 clones enchanted/afflicted cards before clearing
+copied event subscribers. Live subscriptions are untouched. Unreviewed external models
+fail closed with an unavailable preview. Titles, costs and damage collection remain
+independent. Previews have no selected target. Card nodes update in place; a description-only
+change touches no Godot node properties. Forge/Replay notifications are observed.
+
+Guardian separates value invalidation from structural reconciliation. Generic native
+notifications no longer unbind every model. New lifecycle reactions default to uncertain
+unless explicitly covered. Doom thresholds/chained death reactions, offensive/custom orbs,
+Sly and other unsupported effects still produce partial forecasts. This update does not
+execute native kill/end-turn/RNG commands or claim to simulate every card interaction.
+Intent label updates use native `SetTextAutoSize`.
+
+Both scripts run nine behavior suites, compile the mod, then check metadata/IL contracts
+including visibility, return types, event signatures, preview clone boundaries and absence
+of journal debug polling. These checks do not certify Godot rendering, host/client input,
+multiplayer synchronization or FPS. Test in-game F3 targeting with enchanted cards, F5 across
+victory/defeat/retry/reload, hidden F6 collection, two-player poison, Osty overflow, extra-turn
+ready/undo and overlay scaling. Back up settings/journal before testing a new build.
 
 ## Repository layout
 
 - `BetterSpire2/` — mod implementation, feature modules, UI, and game patches.
-- `tests/` — six C# behavior projects, the v0.111 API contract, and their JSON fixtures.
+- `tests/` — nine C# behavior projects, the v0.111 API contract, and their JSON fixtures.
 - `references/` — assemblies used for compilation.
-- `tools/cli_reader.py` — optional assembly inspection utility.
 - `build.cmd`, `build.ps1`, `build.sh` — test and packaging entry points.
 
 ## Credits

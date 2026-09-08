@@ -79,6 +79,7 @@ internal static class GameApiCompatibilityTests
             VerifyManifest(root);
             VerifyNativeBoundaryCalls(mod);
             VerifyWinPatchTarget(game, mod);
+            VerifyAdditionalContracts(game, mod, root);
 
             Console.WriteLine($"PASS {_checks} v0.111 metadata compatibility checks.");
             return 0;
@@ -137,12 +138,65 @@ internal static class GameApiCompatibilityTests
                 "compiled coverage guard includes " + hook);
     }
 
+    private static void VerifyAdditionalContracts(MetadataAssembly game, MetadataAssembly mod, string root)
+    {
+        const string card = "MegaCrit.Sts2.Core.Models.CardModel";
+        const string model = "MegaCrit.Sts2.Core.Models.AbstractModel";
+        const string state = "MegaCrit.Sts2.Core.Combat.CombatState";
+        const string manager = "MegaCrit.Sts2.Core.Combat.CombatManager";
+        const string runManager = "MegaCrit.Sts2.Core.Runs.RunManager";
+        const string variables = "MegaCrit.Sts2.Core.Localization.DynamicVars.DynamicVarSet";
+        game.RequireContract(model, "MutableClone", model, MethodAttributes.Public, false);
+        game.RequireContract(card, "UpdateDynamicVarPreview", "System.Void", MethodAttributes.Public, false,
+            "MegaCrit.Sts2.Core.Entities.Cards.CardPreviewMode", "MegaCrit.Sts2.Core.Entities.Creatures.Creature", variables);
+        game.RequireContract(card, "GetDescriptionForPile", "System.String", MethodAttributes.Public, false,
+            "MegaCrit.Sts2.Core.Entities.Cards.PileType", "MegaCrit.Sts2.Core.Entities.Creatures.Creature");
+        game.RequireContract("MegaCrit.Sts2.Core.Combat.History.CombatHistoryEntry", "get_RoundNumber",
+            "System.Int32", MethodAttributes.Private, false);
+        game.RequireContract("MegaCrit.Sts2.Core.Combat.History.CombatHistoryEntry", "get_CurrentSide",
+            "MegaCrit.Sts2.Core.Combat.CombatSide", MethodAttributes.Private, false);
+        game.RequireContract("MegaCrit.Sts2.Core.Models.Powers.PoisonPower", "get_TriggerCount",
+            "System.Int32", MethodAttributes.Private, false);
+        game.RequireContract("MegaCrit.Sts2.Core.Models.Relics.BeatingRemnant", "get_DamageReceivedThisTurn",
+            "System.Decimal", MethodAttributes.Private, false);
+        foreach (string prefix in new[] { "add_", "remove_" })
+        {
+            game.RequireContract(runManager, prefix + "RunStarted", "System.Void", MethodAttributes.Public, false,
+                "System.Action<MegaCrit.Sts2.Core.Runs.RunState>");
+            game.RequireContract("MegaCrit.Sts2.Core.Combat.CombatStateTracker", prefix + "CombatStateChanged",
+                "System.Void", MethodAttributes.Public, false, "System.Action<" + state + ">");
+        }
+        foreach (string name in new[] { "Tick", "CanTrack", "OnCombatSetUp" })
+            Check(!mod.Calls("BetterSpire2.Journal.Game.JournalService", name, manager, "DebugOnlyGetState", 0),
+                "journal " + name + " never polls debug combat state");
+        Check(mod.Calls("BetterSpire2.Runtime.RunLifecycle", "EnsureAttached", runManager, "add_RunStarted", 1),
+            "native run observer attaches");
+        Check(mod.Calls("BetterSpire2.Runtime.RunLifecycle", "Stop", runManager, "remove_RunStarted", 1),
+            "native run observer detaches");
+        const string preview = "BetterSpire2.HandViewer.DetachedCardPreview";
+        Check(mod.Calls(preview, "Description", model, "MutableClone", 0), "native deep clone for isolated preview");
+        Check(!mod.Calls(preview, "Description", card, "CreateClone", 0), "preview never registers with CardScope");
+        Check(mod.Calls(preview, "Description", card, "UpdateDynamicVarPreview", 3), "native preview writes detached output");
+        const string hand = "BetterSpire2.HandViewer.TeammateHandViewer+PlayerHandSection";
+        Check(!mod.Calls(hand, "RefreshCards", card, "UpdateDynamicVarPreview", 3), "hand no longer writes live preview");
+        Check(!mod.Calls(hand, "UpdateCard", "Godot.Node", "QueueFree", 0), "card changes preserve node subtree");
+        Check(mod.ParameterCounts("BetterSpire2.Guardian.Core.ForecastHookPolicy", "IsReaction").Contains(1),
+            "conservative lifecycle policy included");
+        // Test the inspected native hazard as well as source-linked isolation behavior.
+        Check(game.Calls(card, "DeepCloneFields", card, "EnchantInternal", 2), "native clone reapplies enchantment");
+        Check(game.Calls(card, "EnchantInternal", "System.Action", "Invoke", 0), "native clone can invoke shallow event subscribers");
+        string snapshot = Path.Combine(root, "references", "v111", "sts2.dll");
+        if (File.Exists(snapshot))
+            Check(File.ReadAllBytes(snapshot).SequenceEqual(File.ReadAllBytes(Path.Combine(root, "references", "sts2.dll"))),
+                "canonical references equal audited v111 snapshot");
+    }
+
     private static void VerifyManifest(string root)
     {
         string path = Path.Combine(root, "bin", "Release", "net9.0", "BetterSpire2Lite.json");
         using JsonDocument json = JsonDocument.Parse(File.ReadAllText(path));
         var manifest = json.RootElement;
-        Equal("3.6.0-v111", manifest.GetProperty("version").GetString(), "manifest version");
+        Equal("3.6.1-v111", manifest.GetProperty("version").GetString(), "manifest version");
         Equal("0.111.0", manifest.GetProperty("min_game_version").GetString(), "minimum game version");
         Equal(false, manifest.GetProperty("affects_gameplay").GetBoolean(), "non-gameplay manifest flag");
     }
@@ -220,6 +274,21 @@ internal static class GameApiCompatibilityTests
                 .Select(method => method.DecodeSignature(_names, genericContext: null).ParameterTypes)
                 .Any(observed => observed.SequenceEqual(parameters));
             Check(found, fullName + "." + methodName + "(" + string.Join(", ", parameters) + ")");
+        }
+
+        internal void RequireContract(string owner, string name, string returnType,
+            MethodAttributes access, bool isStatic, params string[] parameters)
+        {
+            var type = _metadata.GetTypeDefinition(FindType(owner) ?? throw new TypeLoadException(owner));
+            bool found = type.GetMethods().Select(h => _metadata.GetMethodDefinition(h)).Any(method =>
+            {
+                if (_metadata.GetString(method.Name) != name) return false;
+                var signature = method.DecodeSignature(_names, null);
+                return signature.ReturnType == returnType && signature.ParameterTypes.SequenceEqual(parameters) &&
+                    (method.Attributes & MethodAttributes.MemberAccessMask) == access &&
+                    ((method.Attributes & MethodAttributes.Static) != 0) == isStatic;
+            });
+            Check(found, "visibility/static/return/parameters: " + owner + "." + name);
         }
 
         private TypeDefinitionHandle? FindType(string fullName)

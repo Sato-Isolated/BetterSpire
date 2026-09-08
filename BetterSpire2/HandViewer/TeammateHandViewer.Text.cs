@@ -11,13 +11,15 @@ public static partial class TeammateHandViewer
     {
         try
         {
-            // The bundled DLL exposes this overload. No reflection or dynamic dispatch on hover.
-            string description = card.GetDescriptionForPile(card.Pile?.Type ?? PileType.Hand, null);
-            return CleanDescriptionText(description);
+            string description = DetachedCardPreview.Description(card);
+            return CleanDescriptionText(description) + "\n\n" + (ModText.IsFrench
+                ? "Aperçu sans cible sélectionnée." : "Preview without a selected target.");
         }
         catch
         {
-            return CleanDescriptionText(card.Description?.GetFormattedText() ?? "");
+            // No fallback writes or formatting on shared live variables.
+            return ModText.IsFrench ? "Aperçu isolé indisponible pour cette carte. Les statistiques restent actives."
+                : "Isolated preview unavailable for this card. Combat statistics remain active.";
         }
     }
 

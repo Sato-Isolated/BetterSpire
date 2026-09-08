@@ -44,18 +44,18 @@ internal static class NIntent_UpdateVisuals_Patch
                 var cached = Labels.GetValue(__instance, static _ => new LabelCache());
                 // Native UpdateVisuals has just produced the damage/repeat label for the current state.
                 if (ReferenceEquals(cached.Intent, attack) && cached.Input == text && cached.Repeats == repeats)
-                { if (cached.Output != text) ____valueLabel.Text = cached.Output; return; }
+                { if (cached.Output != text) ____valueLabel.SetTextAutoSize(cached.Output); return; }
                 int damage = attack.GetSingleDamage(____targets, ____owner);
                 // Verified native MultiAttackIntent.GetTotalDamage is singleDamage * Repeats.
                 int total = checked(damage * repeats);
                 string output = damage > 0 ? text + $" ({total})" : text;
                 cached.Intent = attack; cached.Input = text; cached.Repeats = repeats; cached.Output = output;
-                if (output != text) ____valueLabel.Text = output;
+                if (output != text) ____valueLabel.SetTextAutoSize(output);
                 return;
             }
             int single = attack.GetSingleDamage(____targets, ____owner);
             int customTotal = attack.GetTotalDamage(____targets, ____owner);
-            if (single > 0 && customTotal > single) ____valueLabel.Text = text + $" ({customTotal})";
+            if (single > 0 && customTotal > single) ____valueLabel.SetTextAutoSize(text + $" ({customTotal})");
         }
         catch (Exception ex)
         {

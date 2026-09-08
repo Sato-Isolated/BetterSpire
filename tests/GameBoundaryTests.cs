@@ -122,7 +122,22 @@ internal static class GameBoundaryTests
         Check(changes == before + 2, "cost and forge invalidate immediately");
         before = changes; manager.StateTracker.Publish(state);
         Check(changes == before + 1, "native deferred notification invalidates");
-        observer.Observe(state);
+        int generation = observer.BindingGeneration;
+        for (int i = 0; i < 100; i++)
+        { manager.StateTracker.Publish(state); observer.Observe(state); }
+        Check(observer.BindingGeneration == generation, "value notifications never rebuild delegates");
+        var replacement = new CardModel();
+        player.PlayerCombatState!.Hand.Cards[0] = replacement;
+        manager.StateTracker.Publish(state); observer.Observe(state);
+        Check(observer.BindingGeneration == generation + 1, "same-size native hand replacement rebinds");
+        before = changes; card.Forge(); replacement.Forge();
+        Check(changes == before + 1, "old card detached and replacement observed");
+        card = replacement;
+        var replacementRelic = new RelicModel();
+        player.Relics[0] = replacementRelic;
+        manager.StateTracker.Publish(state); observer.Observe(state);
+        Check(observer.BindingGeneration == generation + 2, "same-size relic replacement rebinds");
+        relic = replacementRelic;
         before = changes; manager.StateTracker.Publish(new CombatState());
         Check(changes == before, "old state notification ignored");
         manager.CurrentCombatId = new(11); manager.StateTracker.Publish(state);

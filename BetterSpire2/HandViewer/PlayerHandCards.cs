@@ -18,7 +18,12 @@ public static partial class TeammateHandViewer
             internal CardVisual Visual;
             internal Control Control;
             internal int Generation;
-            internal CardView(CardVisual visual, Control control) { Visual = visual; Control = control; }
+            internal TextureRect Portrait;
+            internal Label Missing, Cost;
+            internal StyleBoxFlat Border;
+            internal CardView(CardVisual visual, Control control, TextureRect portrait,
+                Label missing, Label cost, StyleBoxFlat border)
+            { Visual = visual; Control = control; Portrait = portrait; Missing = missing; Cost = cost; Border = border; }
         }
         private static CardVisual ReadVisual(CardModel card)
         {
@@ -53,14 +58,14 @@ public static partial class TeammateHandViewer
                         ModText.T("Card preview unavailable. Actual combat statistics remain available."),
                         null, HudTheme.Muted, ModSettings.CardScalePercent);
                 }
-                if (!_cardViews.TryGetValue(card, out var view) || !GodotObject.IsInstanceValid(view.Control) || view.Visual != visual)
+                if (!_cardViews.TryGetValue(card, out var view) || !GodotObject.IsInstanceValid(view.Control))
                 {
                     if (view != null) FreeCard(view.Control);
-                    var control = BuildCompactCard(visual.Portrait, visual.Cost, visual.TypeColor);
-                    view = new CardView(visual, control);
+                    view = BuildCompactCard(visual);
                     _cardViews[card] = view;
-                    _cardRow!.AddChild(control);
+                    _cardRow!.AddChild(view.Control);
                 }
+                else if (view.Visual != visual) UpdateCard(view, visual);
                 view.Generation = _viewGeneration;
                 if (view.Control.GetIndex() != i) _cardRow!.MoveChild(view.Control, i);
             }
@@ -76,51 +81,59 @@ public static partial class TeammateHandViewer
             control.QueueFree();
         }
 
-        private static Control BuildCompactCard(Texture2D? portrait, string costText, Color typeColor)
+        private static CardView BuildCompactCard(CardVisual visual)
         {
             var card = new Control
             {
-                CustomMinimumSize = new Vector2(CardWidth, PortraitHeight),
                 SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin,
                 SizeFlagsVertical = Control.SizeFlags.ShrinkBegin,
-                MouseFilter = Control.MouseFilterEnum.Stop,
-                ClipContents = true
+                MouseFilter = Control.MouseFilterEnum.Stop, ClipContents = true
             };
-            if (portrait != null)
+            var image = new TextureRect
             {
-                var image = new TextureRect
-                {
-                    Texture = portrait, ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-                    StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
-                    MouseFilter = Control.MouseFilterEnum.Ignore
-                };
-                image.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-                card.AddChild(image);
-            }
-            else
-            {
-                var unavailable = UiHelpers.CreateLabel("?", HudTheme.Muted, 12, HorizontalAlignment.Center);
-                unavailable.VerticalAlignment = VerticalAlignment.Center;
-                unavailable.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-                HudTheme.Outline(unavailable); card.AddChild(unavailable);
-            }
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
+                MouseFilter = Control.MouseFilterEnum.Ignore
+            };
+            image.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect); card.AddChild(image);
+            var missing = UiHelpers.CreateLabel("?", HudTheme.Muted, 12, HorizontalAlignment.Center);
+            missing.VerticalAlignment = VerticalAlignment.Center;
+            missing.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+            missing.MouseFilter = Control.MouseFilterEnum.Ignore;
+            HudTheme.Outline(missing); card.AddChild(missing);
             var edge = new Panel { MouseFilter = Control.MouseFilterEnum.Ignore };
             edge.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-            edge.AddThemeStyleboxOverride("panel", UiHelpers.CreatePanelStyle(Colors.Transparent, new Color(typeColor, .7f), 1, 2, 0));
-            card.AddChild(edge);
-            if (costText.Length > 0)
+            var border = UiHelpers.CreatePanelStyle(Colors.Transparent, new Color(visual.TypeColor, .7f), 1, 2, 0);
+            edge.AddThemeStyleboxOverride("panel", border); card.AddChild(edge);
+            var cost = UiHelpers.CreateLabel("", Colors.White, 10);
+            cost.MouseFilter = Control.MouseFilterEnum.Ignore;
+            cost.Position = new Vector2(2, 0); cost.ClipText = true;
+            cost.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            cost.AddThemeStyleboxOverride("normal", UiHelpers.CreatePanelStyle(new Color(0, 0, 0, .72f), Colors.Transparent, 0, 2, 0));
+            HudTheme.Outline(cost); card.AddChild(cost);
+            var view = new CardView(visual, card, image, missing, cost, border);
+            UpdateCard(view, visual, force: true);
+            return view;
+        }
+        private static void UpdateCard(CardView view, CardVisual visual, bool force = false)
+        {
+            // Description-only changes touch no Godot properties or node structure.
+            if (force || view.Visual.Scale != visual.Scale)
             {
-                // The full cost (including stars and X) also stays in the tooltip.
-                // Clip the badge within the thumbnail instead of making a long cost widen it.
-                var cost = UiHelpers.CreateLabel(costText, Colors.White, 10);
-                cost.Position = new Vector2(2, 0);
-                cost.Size = new Vector2(Math.Max(1, CardWidth - 4), 14);
-                cost.ClipText = true;
-                cost.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-                cost.AddThemeStyleboxOverride("normal", UiHelpers.CreatePanelStyle(new Color(0, 0, 0, .72f), Colors.Transparent, 0, 2, 0));
-                HudTheme.Outline(cost); card.AddChild(cost);
+                view.Control.CustomMinimumSize = new Vector2(CardWidth, PortraitHeight);
+                view.Cost.Size = new Vector2(Math.Max(1, CardWidth - 4), 14);
             }
-            return card;
+            if (force || view.Visual.Portrait != visual.Portrait)
+            {
+                view.Portrait.Texture = visual.Portrait;
+                view.Portrait.Visible = visual.Portrait != null;
+                view.Missing.Visible = visual.Portrait == null;
+            }
+            if (force || view.Visual.Cost != visual.Cost)
+            { view.Cost.Text = visual.Cost; view.Cost.Visible = visual.Cost.Length > 0; }
+            if (force || view.Visual.TypeColor != visual.TypeColor)
+                view.Border.BorderColor = new Color(visual.TypeColor, .7f);
+            view.Visual = visual;
         }
 
         private void ClearCards()

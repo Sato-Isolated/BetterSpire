@@ -27,7 +27,9 @@ internal sealed class ForecastEventObserver : IDisposable
     private readonly List<CardModel> _cards = new();
     private readonly List<RelicModel> _relics = new();
     private readonly Dictionary<MonsterModel, object?> _moves = new();
-    private bool _bindingsDirty;
+    private bool _bindingsDirty, _checkStructure;
+    private long _nextStructuralCheck;
+    internal int BindingGeneration { get; private set; }
 
     internal ForecastEventObserver(Action changed) => _changed = changed;
     internal void Observe(CombatState state)
@@ -53,6 +55,14 @@ internal sealed class ForecastEventObserver : IDisposable
             _bindingsDirty = true;
             _changed();
         }
+        long now = Environment.TickCount64;
+        if (_checkStructure || now >= _nextStructuralCheck)
+        {
+            _checkStructure = false;
+            _nextStructuralCheck = now + 2000;
+            if (!_bindingsDirty && !StructureMatches())
+            { _bindingsDirty = true; _changed(); }
+        }
         if (_bindingsDirty) BindModels();
         // A move can change without a history entry. Read identities only; never evaluate damage here.
         foreach (var creature in _creatures)
@@ -67,7 +77,12 @@ internal sealed class ForecastEventObserver : IDisposable
     private void NativeStateChanged(CombatState state)
     {
         if (ReferenceEquals(_state, state) && _manager?.IsCurrentLiveCombat(_combatId) == true &&
-            !_manager.IsOverOrEnding) Rebind();
+            !_manager.IsOverOrEnding)
+        {
+            // Generic value changes require invalidation, not delegate teardown.
+            _checkStructure = true;
+            Changed();
+        }
     }
     private void PlayerEndedTurn(Player _, bool canBackOut) => Changed();
     private void PlayerUnendedTurn(Player _) => Changed();
@@ -80,6 +95,32 @@ internal sealed class ForecastEventObserver : IDisposable
     private void RelicsChanged(RelicModel _) => Rebind();
     private void Rebind() { _bindingsDirty = true; _changed(); }
     private void CardChanged(CardModel _) => Rebind();
+    private bool StructureMatches()
+    {
+        if (_state == null) return false;
+        int creatures = 0, players = 0, states = 0, relics = 0, piles = 0, cards = 0;
+        foreach (var creature in _state.Creatures)
+            if (!Matches(_creatures, ref creatures, creature)) return false;
+        foreach (var player in _state.Players)
+        {
+            if (!Matches(_players, ref players, player)) return false;
+            foreach (var relic in player.Relics)
+                if (!Matches(_relics, ref relics, relic)) return false;
+            var combat = player.PlayerCombatState;
+            if (combat == null) continue;
+            if (!Matches(_playerStates, ref states, combat)) return false;
+            foreach (var pile in combat.AllPiles)
+                if (!Matches(_piles, ref piles, pile)) return false;
+            foreach (var card in combat.Hand.Cards)
+                if (!Matches(_cards, ref cards, card)) return false;
+        }
+        return creatures == _creatures.Count && players == _players.Count &&
+            states == _playerStates.Count && relics == _relics.Count &&
+            piles == _piles.Count && cards == _cards.Count;
+    }
+    private static bool Matches<T>(List<T> expected, ref int index, T item) where T : class =>
+        index < expected.Count && ReferenceEquals(expected[index++], item);
+
     private void BindModels()
     {
         UnbindModels();
@@ -134,6 +175,7 @@ internal sealed class ForecastEventObserver : IDisposable
             }
         }
         _bindingsDirty = false;
+        BindingGeneration++;
     }
     private void UnbindModels()
     {
@@ -187,5 +229,6 @@ internal sealed class ForecastEventObserver : IDisposable
         UnbindModels();
         _state = null; _history = null; _bindingsDirty = false;
         _manager = null; _combatId = null; _nativeTrackerSubscribed = false;
+        _checkStructure = false; _nextStructuralCheck = 0;
     }
 }

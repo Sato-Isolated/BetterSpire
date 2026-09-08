@@ -136,7 +136,9 @@ internal sealed class DamageMeterHud
         _heading!.MouseFilter = locked ? Control.MouseFilterEnum.Ignore : Control.MouseFilterEnum.Stop;
         _heading.MouseDefaultCursorShape = locked ? Control.CursorShape.Arrow : Control.CursorShape.Move;
         _heading.TooltipText = ModText.T(locked ? "Meter position locked" : "Drag the title to move") +
-            (_snapshot?.IsPartial == true ? "\n" + ModText.T("Partial data: some damage could not be observed.") : "");
+            (_snapshot?.IsPartial == true ? "\n" + ModText.T("Partial data: some damage could not be observed.") : "") +
+            "\n" + T("Percentages use attributed damage only. Poison is shared by observed stack contribution.",
+                "Pourcentages sur les dégâts attribués uniquement. Poison réparti selon les contributions observées.");
     }
     private void UpdateText(DamageMeterSnapshot data, bool french)
     {
