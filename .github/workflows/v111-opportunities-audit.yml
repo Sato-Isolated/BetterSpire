@@ -1,0 +1,44 @@
+name: Inspect v111 native opportunities
+on:
+  push:
+    branches: [audit/v111-native-opportunities]
+    paths: ['.github/workflows/v111-opportunities-audit.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
+        with:
+          dotnet-version: |
+            9.0.x
+            8.0.x
+      - name: Decompile supplied assembly for read-only analysis
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/native-audit/code
+          dotnet tool install ilspycmd --tool-path /tmp/ilspy --version 9.1.0.7988 --add-source https://api.nuget.org/v3/index.json
+          /tmp/ilspy/ilspycmd --version > /tmp/native-audit/tool-version.txt
+          sha256sum references/v111/sts2.dll references/v111/sts2.xml > /tmp/native-audit/input-sha256.txt
+          git rev-parse HEAD > /tmp/native-audit/audit-commit.txt
+          /tmp/ilspy/ilspycmd -l c references/v111/sts2.dll > /tmp/native-audit/classes.txt
+          /tmp/ilspy/ilspycmd -l i references/v111/sts2.dll > /tmp/native-audit/interfaces.txt
+          /tmp/ilspy/ilspycmd -l e references/v111/sts2.dll > /tmp/native-audit/enums.txt
+          /tmp/ilspy/ilspycmd -p -o /tmp/native-audit/code -r references/v111 references/v111/sts2.dll
+          find /tmp/native-audit/code -type f ! -name '*.cs' -delete
+          cp references/v111/sts2.xml /tmp/native-audit/native-documentation.xml
+          printf 'Classes listed: '; wc -l < /tmp/native-audit/classes.txt
+          printf 'C# files recovered: '; find /tmp/native-audit/code -type f -name '*.cs' | wc -l
+          cat /tmp/native-audit/tool-version.txt /tmp/native-audit/input-sha256.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v111-native-inspection
+          path: /tmp/native-audit/
+          retention-days: 1
+          if-no-files-found: error
