@@ -25,9 +25,16 @@ jobs:
             dotnet run --project tests/NativeJournal.Core.Tests.csproj --configuration Release
           fi
       - name: Record source revision
-        run: git rev-parse HEAD >> dist/BetterSpire2Lite/BUILD-SUCCESS.txt
+        run: |
+          git rev-parse HEAD >> dist/BetterSpire2Lite/BUILD-SUCCESS.txt
+          git archive --format=zip --output=/tmp/BetterSpire-sources.zip HEAD BetterSpire2 tests BetterSpire2Lite.csproj build.sh build.ps1 build.cmd README.md global.json NuGet.Config Properties
       - uses: actions/upload-artifact@v4
         with:
           name: BetterSpire-v111
           path: dist/BetterSpire2Lite/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BetterSpire-sources
+          path: /tmp/BetterSpire-sources.zip
           if-no-files-found: error
