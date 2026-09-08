@@ -22,7 +22,7 @@ internal sealed class JournalWindow
     private readonly Button[] _rowButtons = new Button[JournalReportBuilder.RowsPerPage];
     private readonly Label[] _rowValues = new Label[JournalReportBuilder.RowsPerPage];
     private readonly string?[] _rowKeys = new string?[JournalReportBuilder.RowsPerPage];
-    private bool _open, _sources, _runDetails, _invalid = true;
+    private bool _open, _sources, _runDetails, _timeline, _invalid = true;
     private int _page, _pages = 1, _styledScope = -1;
     private long _revision = -1;
     private (JournalScope Scope, string? Combat, int Round, string? Player, bool Live, bool French, string Warning) _selectionStamp;
@@ -62,17 +62,17 @@ internal sealed class JournalWindow
         var stamp = (selection.Scope, selection.CombatKey, selection.Round, selection.PlayerId, selection.FollowLive, ModText.IsFrench, storageWarning);
         if (!_invalid && _revision == session.Revision && _selectionStamp == stamp) return;
         _invalid = false; _revision = session.Revision; _selectionStamp = stamp;
-        var report = JournalReportBuilder.Build(session, selection, _sources, _page, ModText.IsFrench, _runDetails);
+        var report = JournalReportBuilder.Build(session, selection, _sources, _page, ModText.IsFrench, _runDetails, _timeline);
         _page = report.Page; _pages = report.Pages;
         _title!.Text = T("COMBAT JOURNAL", "JOURNAL DE COMBAT");
         _context!.Text = report.Context; _context.TooltipText = report.Context;
         _player!.Text = report.Player; _player.TooltipText = T("Click to switch player. Team is a separate view.", "Cliquer pour changer de joueur. L’équipe est une vue distincte.");
         _sourceButton!.Text = selection.Scope == JournalScope.Run
             ? (_sources ? T("Combats", "Combats") : _runDetails ? T("Sources", "Sources") : T("Details", "Détails"))
-            : _sources ? T("Overview", "Bilan") : T("Sources", "Sources");
+            : _timeline ? T("Overview", "Bilan") : _sources ? T("Timeline", "Chronologie") : T("Sources", "Sources");
         _sourceButton.TooltipText = selection.Scope == JournalScope.Run
             ? T("Cycle run views: combat history, all totals, attributed sources.", "Vues de partie : historique des combats, tous les totaux, sources attribuées.")
-            : T("Switch between observed details and attributed sources.", "Alterner entre le détail observé et les sources attribuées.");
+            : T("Cycle observed totals, sources, and chronological native damage results.", "Alterner entre bilan, sources et chronologie des dégâts natifs.");
         _live!.Text = T("Live", "En cours");
         _live.Disabled = selection.FollowLive;
         string[] names = { T("Round", "Tour"), T("Combat", "Combat"), T("Run", "Partie") };
@@ -97,12 +97,12 @@ internal sealed class JournalWindow
             _rowButtons[i].Visible = _rowValues[i].Visible = visible; _rowKeys[i] = null;
             if (!visible) continue;
             var row = report.Rows[i]; _rowKeys[i] = row.CombatKey;
-            _rowButtons[i].Size = new Vector2(_sources ? 232 : 338, 23);
-            _rowValues[i].Position = new Vector2(_sources ? 256 : 360, 309 + i * 24);
-            _rowValues[i].Size = new Vector2(_sources ? 278 : 174, 23);
-            _rowButtons[i].Text = row.Label; _rowButtons[i].TooltipText = row.Label + "  " + row.Value;
+            _rowButtons[i].Size = new Vector2(_sources || _timeline ? 232 : 338, 23);
+            _rowValues[i].Position = new Vector2(_sources || _timeline ? 256 : 360, 309 + i * 24);
+            _rowValues[i].Size = new Vector2(_sources || _timeline ? 278 : 174, 23);
+            _rowButtons[i].Text = row.Label; _rowButtons[i].TooltipText = row.Detail ?? row.Label + "  " + row.Value;
             _rowButtons[i].Disabled = row.CombatKey == null;
-            _rowValues[i].Text = row.Value; _rowValues[i].TooltipText = row.Value;
+            _rowValues[i].Text = row.Value; _rowValues[i].TooltipText = row.Detail ?? row.Value;
         }
         _pageLabel!.Text = $"{_page + 1} / {_pages}";
         _pagePrevious!.Disabled = _page == 0; _pageNext!.Disabled = _page >= _pages - 1;
@@ -128,7 +128,7 @@ internal sealed class JournalWindow
         {
             int tab = i;
             _tabs[i] = MakeButton("", 18 + i * 172, 46, 164, 30, () =>
-            { JournalService.Selection.SelectScope((JournalScope)tab); _page = 0; _sources = false; _runDetails = false; Invalidate(); });
+            { JournalService.Selection.SelectScope((JournalScope)tab); _page = 0; _sources = false; _runDetails = false; _timeline = false; Invalidate(); });
         }
         _context = LabelAt("", 18, 84, 360, 25, 13, _text);
         _previous = MakeButton("‹", 380, 82, 30, 28, () => Move(-1));
@@ -137,7 +137,12 @@ internal sealed class JournalWindow
         _player = MakeButton("", 18, 120, 396, 27, () => { JournalService.Selection.CyclePlayer(JournalService.Session.Run); _page = 0; Invalidate(); });
         _sourceButton = MakeButton("", 430, 120, 104, 27, () =>
         {
-            if (JournalService.Selection.Scope != JournalScope.Run) _sources = !_sources;
+            if (JournalService.Selection.Scope != JournalScope.Run)
+            {
+                if (_timeline) { _timeline = false; _sources = false; }
+                else if (_sources) { _sources = false; _timeline = true; }
+                else _sources = true;
+            }
             else if (_sources) { _sources = false; _runDetails = false; }
             else if (_runDetails) { _sources = true; _runDetails = false; }
             else _runDetails = true;
@@ -159,7 +164,7 @@ internal sealed class JournalWindow
             _rowButtons[i] = MakeButton("", 18, 309 + i * 24, 338, 23, () =>
             {
                 if (_rowKeys[row] is { } key && JournalService.Session.Run is { } run)
-                { JournalService.Selection.SelectCombat(run, key); _page = 0; _sources = false; _runDetails = false; Invalidate(); }
+                { JournalService.Selection.SelectCombat(run, key); _page = 0; _sources = false; _runDetails = false; _timeline = false; Invalidate(); }
             }, flat: true);
             _rowValues[i] = LabelAt("", 360, 309 + i * 24, 174, 23, 12, _text);
             _rowValues[i].HorizontalAlignment = HorizontalAlignment.Right;

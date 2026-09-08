@@ -13,7 +13,7 @@ public class ModEntry
 
     private static bool _initialized;
 
-    private static readonly Type[] _combatPatches = new Type[11]
+    private static readonly Type[] _combatPatches = new Type[]
     {
         typeof(CombatManager_Reset_Patch),
         typeof(CombatManager_EndCombatInternal_Patch),
@@ -23,7 +23,6 @@ public class ModEntry
         typeof(Journal_BlockClearDecision_Patch),
         typeof(PlayerCombatState_GainEnergy_Patch),
         typeof(Journal_HistoryClear_Patch),
-        typeof(Journal_RunLaunch_Patch),
         typeof(Journal_RunCleanup_Patch),
         typeof(Journal_Healing_Patch)
     };

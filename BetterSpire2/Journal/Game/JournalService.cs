@@ -37,6 +37,10 @@ internal static class JournalService
     private static CombatState? _state;
     private static CombatManager? _manager;
     private static CombatHistory? _history;
+    private static CombatId? _combatId;
+    private static CombatRoom? _room;
+    private static bool IsCurrentObservation => _state != null && _manager != null &&
+        ReferenceEquals(_manager, CombatManager.Instance) && _manager.CurrentCombatId == _combatId;
     private static bool _booted, _dirty, _sealed, _inTick;
     private static CombatOutcome _pendingOutcome = CombatOutcome.Interrupted;
     private static long _savedRevision = -1;
@@ -83,12 +87,13 @@ internal static class JournalService
         // Capture the singleton once: checking a second read does not protect the first.
         var manager = CombatManager.Instance;
         if (manager == null) return;
-        var state = manager.DebugOnlyGetState();
+        var state = CombatLifecycle.CurrentState;
         if (state == null || ReferenceEquals(_state, state)) return;
         if (state.RunState is RunState run) BeginRun(run);
         if (Session.Run == null) return;
         Detach();
         _state = state; _manager = manager; _history = manager.History;
+        _combatId = manager.CurrentCombatId; _room = state.RunState.CurrentRoom as CombatRoom;
         _pendingOutcome = CombatOutcome.Interrupted; _sealed = false; _dirty = true; Reader.Reset();
         var room = state.RunState.CurrentRoom;
         string key = $"{state.RunState.CurrentActIndex}:{state.RunState.TotalFloor}:" +
@@ -106,18 +111,26 @@ internal static class JournalService
         Selection.Live(Session.Run); Window.Close();
         Drain(); Save(true);
     }
-    private static void OnHistoryChanged() => _dirty = true;
-    private static void OnTurnStarted(CombatState state) { Session.ObserveRound(state.RoundNumber); _dirty = true; }
-    private static void OnWon(CombatRoom _) { _pendingOutcome = CombatOutcome.Won; Seal(); }
-    private static void OnEnded(CombatRoom _) => Seal();
+    private static void OnHistoryChanged() { if (IsCurrentObservation && !_sealed) _dirty = true; }
+    private static void OnTurnStarted(CombatState state)
+    {
+        if (!_sealed && IsCurrentObservation && ReferenceEquals(_state, state))
+        { Session.ObserveRound(state.RoundNumber); _dirty = true; }
+    }
+    private static bool AcceptEnd(CombatRoom room) => IsCurrentObservation && ReferenceEquals(_room, room) &&
+        _manager?.IsStarting != true && _manager?.IsInProgress != true;
+    private static void OnWon(CombatRoom room)
+    { if (AcceptEnd(room)) { _pendingOutcome = CombatOutcome.Won; Seal(); } }
+    private static void OnEnded(CombatRoom room) { if (AcceptEnd(room)) Seal(); }
     internal static void OnEnding(bool lost)
     {
+        if (!IsCurrentObservation) return;
         _pendingOutcome = lost ? CombatOutcome.Lost : CombatOutcome.Won;
         Drain(); Window.Close();
     }
     internal static void BeforeHistoryClear(CombatHistory history)
     {
-        if (!ReferenceEquals(_history, history)) return;
+        if (!IsCurrentObservation || !ReferenceEquals(_history, history)) return;
         // In the supplied DLL History.Clear happens BEFORE CombatWon/CombatEnded.
         Seal();
     }
@@ -146,20 +159,20 @@ internal static class JournalService
         if (_history != null) _history.Changed -= OnHistoryChanged;
         if (_manager != null)
         { _manager.TurnStarted -= OnTurnStarted; _manager.CombatWon -= OnWon; _manager.CombatEnded -= OnEnded; }
-        _history = null; _manager = null; _state = null; _dirty = false;
+        _history = null; _manager = null; _state = null; _combatId = null; _room = null; _dirty = false;
         Reader.Reset(); Session.DetachCombat();
     }
     private static void Drain()
     {
-        if (_sealed || _state == null || _history == null) return;
-        Session.ObserveRound(_state.RoundNumber);
+        if (_sealed || !IsCurrentObservation || _history == null) return;
+        Session.ObserveRound(_state!.RoundNumber);
         Reader.Drain(_history, Session); _dirty = false;
     }
-    internal static bool Observes(CombatHistory history) => !_sealed && _state != null &&
+    internal static bool Observes(CombatHistory history) => !_sealed && IsCurrentObservation &&
         ReferenceEquals(_history, history) && Session.Active?.Outcome == CombatOutcome.InProgress;
     internal static PoisonDamageCredit? CapturePoison(PoisonPower poison)
     {
-        if (_sealed || _state == null || !ReferenceEquals(poison.Owner.CombatState, _state) ||
+        if (_sealed || !IsCurrentObservation || !ReferenceEquals(poison.Owner.CombatState, _state) ||
             Session.Active?.Outcome != CombatOutcome.InProgress) return null;
         // Consume applications/decrements in native history order BEFORE the tick.
         Drain();
@@ -167,11 +180,11 @@ internal static class JournalService
     }
     internal static void ForgetPoison(PoisonPower poison)
     {
-        if (_state == null || !ReferenceEquals(poison.Owner.CombatState, _state)) return;
+        if (!IsCurrentObservation || !ReferenceEquals(poison.Owner.CombatState, _state)) return;
         Drain(); Reader.ForgetPoison(poison);
     }
-    internal static bool CanTrack(Creature? creature) => !_sealed && _state != null &&
-        ReferenceEquals(_state, CombatManager.Instance?.DebugOnlyGetState()) && HistoryReader.PlayerId(creature) != null;
+    internal static bool CanTrack(Creature? creature) => !_sealed && IsCurrentObservation &&
+        creature != null && ReferenceEquals(creature.CombatState, _state) && HistoryReader.PlayerId(creature) != null;
     internal static void Record(Creature creature, Stat stat, int amount)
     {
         if (amount <= 0 || !CanTrack(creature)) return;
@@ -192,9 +205,8 @@ internal static class JournalService
             using var measurement = PerformanceProbe.Measure(ProbeSection.Journal);
             Boot();
             var manager = RunManager.Instance;
-            if (manager?.IsInProgress == true && !manager.IsCleaningUp && manager.DebugOnlyGetState() is { } run)
-                BeginRun(run);
-            var state = CombatManager.Instance?.DebugOnlyGetState();
+            RunLifecycle.EnsureAttached();
+            var state = CombatLifecycle.CurrentState;
             if (manager?.IsInProgress == true && !manager.IsCleaningUp && state != null && !ReferenceEquals(_state, state) &&
                 (CombatManager.Instance?.IsInProgress == true || CombatManager.Instance?.IsStarting == true) &&
                 CombatManager.Instance?.IsOverOrEnding != true)

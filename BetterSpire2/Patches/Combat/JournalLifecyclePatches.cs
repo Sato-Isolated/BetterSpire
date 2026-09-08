@@ -16,13 +16,6 @@ internal static class Journal_HistoryClear_Patch
     private static void Prefix(CombatHistory __instance)
     { try { JournalService.BeforeHistoryClear(__instance); } catch (Exception ex) { ModLog.Error(nameof(Journal_HistoryClear_Patch), ex); } }
 }
-[HarmonyPatch(typeof(RunManager), nameof(RunManager.Launch))]
-internal static class Journal_RunLaunch_Patch
-{
-    [HarmonyPostfix]
-    private static void Postfix(RunState __result)
-    { try { JournalService.BeginRun(__result); } catch (Exception ex) { ModLog.Error(nameof(Journal_RunLaunch_Patch), ex); } }
-}
 [HarmonyPatch(typeof(RunManager), nameof(RunManager.CleanUp))]
 internal static class Journal_RunCleanup_Patch
 {

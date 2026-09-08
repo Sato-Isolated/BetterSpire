@@ -74,12 +74,12 @@ internal sealed class DamageMeterHud
         if (!EnsureCreated()) return;
         bool french = ModText.IsFrench;
         var stamp = (session.Run.Key, session.Active?.Key, scope, french, ModSettings.DamageMeterIncludeBlock, ModSettings.DamageMeterShowBars);
-        if (_invalid || _revision != session.Revision || _stamp != stamp)
+        if (_invalid || _revision != session.DamageRevision || _stamp != stamp)
         {
             using var measurement = PerformanceProbe.Measure(ProbeSection.DamageMeter);
             _snapshot = DamageMeterBuilder.BuildLive(session, ModSettings.DamageMeterIncludeBlock, scope);
             _rows = DamageMeterBuilder.VisibleRows(_snapshot, french);
-            _revision = session.Revision; _stamp = stamp; _invalid = false;
+            _revision = session.DamageRevision; _stamp = stamp; _invalid = false;
             UpdateText(_snapshot, french);
         }
         var data = _snapshot!;

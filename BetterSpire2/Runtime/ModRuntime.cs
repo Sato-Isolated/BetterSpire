@@ -18,6 +18,7 @@ internal static class ModRuntime
 
     internal static void EnsureStarted()
     {
+        RunLifecycle.EnsureAttached();
         CombatLifecycle.EnsureAttached();
         var game = NGame.Instance;
         if (game == null || !GodotObject.IsInstanceValid(game) || !game.IsInsideTree()) return;
@@ -61,6 +62,7 @@ internal static class ModRuntime
         NGame_Input_Patch.ResetOwnedKeys();
         Cleanup(ReleaseTimer);
         Cleanup(CombatLifecycle.Stop);
+        Cleanup(RunLifecycle.Stop);
         Cleanup(DamageTracker.Hide);
         Cleanup(SettingsMenu.Hide);
         Cleanup(ClockDisplay.Stop);

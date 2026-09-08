@@ -31,10 +31,16 @@ internal sealed class HistoryReader
     }
 
     private readonly HistoryCursor _cursor = new();
+    private readonly Dictionary<Creature, string> _actorIds = new();
+    private string ActorId(Creature creature)
+    {
+        if (!_actorIds.TryGetValue(creature, out var id)) _actorIds[creature] = id = "actor:" + _actorIds.Count;
+        return id;
+    }
     private ConditionalWeakTable<PoisonPower, PoisonStackPool> _poison = new();
     internal void Reset()
     {
-        _cursor.Reset(); _poison = new(); PoisonDamageObserver.Reset();
+        _cursor.Reset(); _actorIds.Clear(); _poison = new(); PoisonDamageObserver.Reset();
     }
     internal PoisonDamageCredit CapturePoison(PoisonPower power) =>
         _poison.GetValue(power, _ => new PoisonStackPool()).Capture(power.Amount);
@@ -43,7 +49,7 @@ internal sealed class HistoryReader
     {
         // The supplied DLL returns its List<T> as IEnumerable<T>. Keep the indexed fast path.
         var entries = history.Entries as IReadOnlyList<CombatHistoryEntry> ?? history.Entries.ToArray();
-        bool unchanged = _cursor.Consume(entries.Count, index =>
+        bool unchanged = _cursor.Consume(entries, index =>
         {
             var entry = entries[index];
             try
@@ -107,33 +113,30 @@ internal sealed class HistoryReader
                 Emit(session, e.Receiver, round, phase, Stat.DamageBlocked, e.Result.BlockedDamage);
                 Creature? dealer = Owner(e.Dealer) != null ? e.Dealer : e.CardSource?.Owner?.Creature;
                 string? dealerId = PlayerId(dealer);
-                if (dealerId != null && session.Run?.Players.ContainsKey(dealerId) == true && e.Receiver.Side == CombatSide.Enemy)
+                bool eligible = e.Receiver.Side == CombatSide.Enemy &&
+                    (dealerId != null || e.Dealer == null || e.Dealer.Side != CombatSide.Enemy);
+                string sourceId = e.CardSource == null ? "effect:unknown" : "card:" + e.CardSource.Id.Entry + ":" + e.CardSource.Title;
+                string sourceName = e.CardSource?.Title ?? "";
+                var attribution = new DamageAttribution(DamageAttributionKind.NotCounted, Array.Empty<DamageShare>());
+                if (eligible)
                 {
-                    Emit(session, dealer, round, phase, Stat.DamageDealtHp, e.Result.UnblockedDamage, e.CardSource, "effect:unknown");
-                    Emit(session, dealer, round, phase, Stat.DamageDealtBlocked, e.Result.BlockedDamage, e.CardSource, "effect:unknown");
-                    Emit(session, dealer, round, phase, Stat.Overkill, e.Result.OverkillDamage, e.CardSource, "effect:unknown");
-                    if (e.Dealer?.PetOwner != null)
-                        Emit(session, dealer, round, phase, Stat.PetDamageDealtHp, e.Result.UnblockedDamage);
+                    PoisonDamageObserver.TryGetCredit(e.Result, out var credit);
+                    attribution = DamageAccounting.Record(session, round, phase,
+                        e.Result.UnblockedDamage, e.Result.BlockedDamage, e.Result.OverkillDamage,
+                        dealerId, sourceId, sourceName, e.CardSource != null, e.Dealer?.PetOwner != null,
+                        Owner(e.Dealer) == null && dealerId != null, credit);
+                    if (attribution.Kind == DamageAttributionKind.PoisonConvention)
+                    { sourceId = "effect:poison"; sourceName = "Poison"; }
                 }
-                else if (e.Receiver.Side == CombatSide.Enemy &&
-                    (e.Dealer == null || e.Dealer.Side != CombatSide.Enemy || dealerId != null))
+                session.RecordDamageTrace(new DamageTraceEntry
                 {
-                    // Only results tagged at PoisonPower's exact native damage call
-                    // receive poison attribution. Other source-less effects stay unknown.
-                    // The journal is still the only place which adds damage to the meter.
-                    if (PoisonDamageObserver.TryGetCredit(e.Result, out var poisonCredit))
-                    {
-                        poisonCredit.Append(session, round, phase, Stat.DamageDealtHp, e.Result.UnblockedDamage);
-                        poisonCredit.Append(session, round, phase, Stat.DamageDealtBlocked, e.Result.BlockedDamage);
-                        poisonCredit.Append(session, round, phase, Stat.Overkill, e.Result.OverkillDamage);
-                    }
-                    else
-                    {
-                        session.AppendUnattributed(round, Stat.DamageDealtHp, e.Result.UnblockedDamage);
-                        session.AppendUnattributed(round, Stat.DamageDealtBlocked, e.Result.BlockedDamage);
-                        session.AppendUnattributed(round, Stat.Overkill, e.Result.OverkillDamage);
-                    }
-                }
+                    Round = round, Phase = phase, Dealer = e.Dealer?.Name ?? dealer?.Name ?? "",
+                    Target = e.Receiver.Name, TargetId = ActorId(e.Receiver),
+                    TargetPlayerId = PlayerId(e.Receiver) ?? "", SourceId = sourceId, Source = sourceName,
+                    Hp = e.Result.UnblockedDamage, Blocked = e.Result.BlockedDamage, Overkill = e.Result.OverkillDamage,
+                    Fatal = e.Result.WasTargetKilled, CountsForMeter = eligible, Attribution = attribution.Kind,
+                    Shares = attribution.Shares.ToArray()
+                });
                 break;
         }
     }
