@@ -5,6 +5,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="HudTests.cs" />
+    <Compile Include="HandTooltipTests.cs" />
+    <Compile Include="../BetterSpire2/HandViewer/HandTooltipGeometry.cs" Link="Hand/HandTooltipGeometry.cs" />
     <Compile Include="CompactHudTests.cs" />
     <Compile Include="../BetterSpire2/UI/CompactHudGeometry.cs" Link="UI/CompactHudGeometry.cs" />
     <Compile Include="HudCoexistenceTests.cs" />

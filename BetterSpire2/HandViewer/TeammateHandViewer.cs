@@ -86,8 +86,9 @@ public static partial class TeammateHandViewer
             if (RefreshRoster(run) || _french != ModText.IsFrench) RebuildContent();
         }
         SyncContextVisibility();
-        if (!IsVisible) return;
+        if (!IsVisible) { HideCardTooltip(); return; }
         foreach (var section in _sections) section.FlushPendingChanges();
+        RefreshCardTooltip();
     }
     private static void SyncContextVisibility()
     {
@@ -154,6 +155,7 @@ public static partial class TeammateHandViewer
     internal static void Stop() { Hide(); DetachManager(); _players.Clear(); _currentPage = 0; _localNetId = null; }
     private static void ClearSections()
     {
+        HideCardTooltip();
         foreach (var section in _sections) section.Cleanup();
         _sections.Clear();
     }
@@ -165,6 +167,7 @@ public static partial class TeammateHandViewer
         _interactiveControls.Clear();
         if (UiHelpers.IsValid(_panel)) _panel!.Visible = false;
         if (UiHelpers.IsValid(_canvasLayer)) _canvasLayer!.QueueFree();
+        _cardTooltip = null; _cardTooltipText = null;
         _canvasLayer = null; _panel = null; _body = null; _scroll = null;
         _handRoot = null;
         _title = null; _previous = _next = null;

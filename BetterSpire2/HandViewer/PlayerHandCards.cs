@@ -56,7 +56,7 @@ public static partial class TeammateHandViewer
                 if (!_cardViews.TryGetValue(card, out var view) || !GodotObject.IsInstanceValid(view.Control) || view.Visual != visual)
                 {
                     if (view != null) FreeCard(view.Control);
-                    var control = BuildCompactCard(visual.Portrait, visual.Name, visual.Cost, visual.Description, visual.TypeColor);
+                    var control = BuildCompactCard(visual.Portrait, visual.Cost, visual.TypeColor);
                     view = new CardView(visual, control);
                     _cardViews[card] = view;
                     _cardRow!.AddChild(control);
@@ -76,14 +76,13 @@ public static partial class TeammateHandViewer
             control.QueueFree();
         }
 
-        private static Control BuildCompactCard(Texture2D? portrait, string cardName, string costText, string description, Color typeColor)
+        private static Control BuildCompactCard(Texture2D? portrait, string costText, Color typeColor)
         {
             var card = new Control
             {
                 CustomMinimumSize = new Vector2(CardWidth, PortraitHeight),
                 SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin,
                 SizeFlagsVertical = Control.SizeFlags.ShrinkBegin,
-                TooltipText = cardName + " · " + costText + "\n\n" + description,
                 MouseFilter = Control.MouseFilterEnum.Stop,
                 ClipContents = true
             };
@@ -129,6 +128,21 @@ public static partial class TeammateHandViewer
             foreach (var view in _cardViews.Values) FreeCard(view.Control);
             _cardViews.Clear(); _removedViews.Clear();
 
+        }
+
+        internal bool TryGetCardTooltip(Vector2 point, out string text, out Rect2 rect)
+        {
+            foreach (var view in _cardViews.Values)
+            {
+                if (!Hits(view.Control, point)) continue;
+                var visual = view.Visual;
+                text = visual.Name + " · " + visual.Cost + "\n\n" + visual.Description;
+                rect = view.Control.GetGlobalRect();
+                return true;
+            }
+            text = "";
+            rect = default;
+            return false;
         }
 
     }

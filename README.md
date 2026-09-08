@@ -38,6 +38,8 @@ Press **F3** to open it, then drag the player name to move it. Its position is s
 
 Card thumbnails are **42 × 42 logical pixels at 100% scale**, adjustable from 50% to 200% in F1. Cards stay on one row; long hands scroll horizontally. Hover a card for its name, cost, and description, or hover the player name for combat statistics.
 
+Card details use a dedicated, click-through overlay instead of Godot's automatic tooltip popup. They follow the hovered card and disappear when you move away, drag the viewer, open settings, or leave the game window. This applies equally to the host and other players; multiplayer validation on both machines is still required.
+
 The viewer **stays open when you click in the game or on another HUD**. Close it with F3, Esc, or its close button. It also closes at combat end and temporarily hides behind blocking game screens. The former “Keep hand viewer open” setting is no longer needed; saved values for that option are ignored.
 
 In **F1 → Multiplayer**, you can enable opening at combat start, show statistics instead of cards, or hide your own hand. If your own hand is hidden and no teammates are available, no empty panel is displayed.

@@ -60,6 +60,7 @@ internal static class HudTests
         Check(OverlayAxis.Clamp(935, 76, 16, 1000, 12, true) == 940, "right snap");
         _checks += HudCoexistenceTests.Run();
         _checks += CompactHudTests.Run();
+        _checks += HandTooltipTests.Run();
         Console.WriteLine($"PASS {_checks} HUD pure C# checks. Godot rendering / in-game behavior NOT tested.");
         return 0;
     }
