@@ -29,27 +29,33 @@ try {
             throw ('Missing compilation reference: references/' + $reference)
         }
     }
-    Write-Host '1/7 Running the C# simulator and overhead HUD tests...'
+    Write-Host '1/9 Running the C# simulator and overhead HUD tests...'
     & dotnet run --project (Join-Path $root 'tests/Guardian.Core.Tests.csproj') --configuration Release
     if ($LASTEXITCODE -ne 0) { throw 'C# tests failed. No release was produced.' }
-    Write-Host '2/7 Running the C# journal tests...'
+    Write-Host '2/9 Running the C# journal tests...'
     & dotnet run --project (Join-Path $root 'tests/Journal.Core.Tests.csproj') --configuration Release
     if ($LASTEXITCODE -ne 0) { throw 'Journal tests failed. No release was produced.' }
-    Write-Host '3/7 Running the C# run damage meter tests...'
+    Write-Host '3/9 Running the C# run damage meter tests...'
     & dotnet run --project (Join-Path $root 'tests/DamageMeter.Core.Tests.csproj') --configuration Release
     if ($LASTEXITCODE -ne 0) { throw 'Damage meter tests failed. No release was produced.' }
-    Write-Host '4/7 Running C# refresh/cache/checkpoint regression tests...'
+    Write-Host '4/9 Running C# refresh/cache/checkpoint regression tests...'
     & dotnet run --project (Join-Path $root 'tests/Performance.Core.Tests.csproj') --configuration Release
     if ($LASTEXITCODE -ne 0) { throw 'Performance regression tests failed. No release was produced.' }
-    Write-Host '5/7 Running C# HUD dependency, navigation and geometry tests...'
+    Write-Host '5/9 Running C# HUD dependency, navigation and geometry tests...'
     & dotnet run --project (Join-Path $root 'tests/Hud.Core.Tests.csproj') --configuration Release
     if ($LASTEXITCODE -ne 0) { throw 'HUD regression tests failed. No release was produced.' }
-    Write-Host '6/7 Running C# poison provenance and async isolation tests...'
+    Write-Host '6/9 Running C# poison provenance and async isolation tests...'
     & dotnet run --project (Join-Path $root 'tests/Poison.Core.Tests.csproj') --configuration Release
     if ($LASTEXITCODE -ne 0) { throw 'Poison attribution tests failed. No release was produced.' }
-    Write-Host '7/7 Building the actual mod against the supplied DLL references...'
+    Write-Host '7/9 Running source-linked game-boundary tests...'
+    & dotnet run --project (Join-Path $root 'tests/GameBoundary.Core.Tests.csproj') --configuration Release
+    if ($LASTEXITCODE -ne 0) { throw 'Game boundary tests failed. No release was produced.' }
+    Write-Host '8/9 Building the actual mod against the supplied DLL references...'
     & dotnet build (Join-Path $root 'BetterSpire2Lite.csproj') --configuration Release --nologo
     if ($LASTEXITCODE -ne 0) { throw 'The mod did not compile. No release was produced.' }
+    Write-Host '9/9 Checking the v0.111 metadata contract and patch targets...'
+    & dotnet run --project (Join-Path $root 'tests/GameApiCompatibility.Tests.csproj') --configuration Release
+    if ($LASTEXITCODE -ne 0) { throw 'The v0.111 API compatibility contract failed. No release was produced.' }
     $output = Join-Path $root 'bin/Release/net9.0'
     $dll = Join-Path $output 'BetterSpire2Lite.dll'
     $manifest = Join-Path $output 'BetterSpire2Lite.json'
@@ -65,7 +71,7 @@ try {
     Copy-Item -LiteralPath $manifest -Destination $destination
     @(
         ('Built locally: ' + (Get-Date -Format o)),
-        'C# core, overhead, journal, damage meter, performance, HUD and poison tests: passed. Mod compilation: passed.',
+        'C# core, overhead, journal, damage meter, performance, HUD, poison, game-boundary and v0.111 API/IL contract tests: passed. Mod compilation: passed.',
         'In-game validation: NOT performed by this script.',
         ('DLL SHA256: ' + (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash)
     ) | Set-Content -LiteralPath (Join-Path $destination 'BUILD-SUCCESS.txt') -Encoding UTF8

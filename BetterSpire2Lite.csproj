@@ -15,7 +15,7 @@
     <ModAuthor>jdr, MindLated</ModAuthor>
     <ModDescription>Compact borderless hand thumbnails (F3), auto-fitted settings (F1), shared HUD controls, coexisting draggable damage meter (F6), poison attribution and journal (F5). Source preview, compilation and in-game validation required.</ModDescription>
     <ModForkedFrom>https://www.nexusmods.com/slaythespire2/mods/2</ModForkedFrom>
-    <ModVersion>3.5.3-compact-hud-preview</ModVersion>
+    <ModVersion>3.6.0-v111</ModVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -30,6 +30,7 @@
       <ModManifestLines Include="  &quot;author&quot;: &quot;$(ModAuthor)&quot;," />
       <ModManifestLines Include="  &quot;description&quot;: &quot;$(ModDescription)&quot;," />
       <ModManifestLines Include="  &quot;version&quot;: &quot;$(ModVersion)&quot;," />
+      <ModManifestLines Include="  &quot;min_game_version&quot;: &quot;0.111.0&quot;," />
       <ModManifestLines Include="  &quot;has_pck&quot;: false," />
       <ModManifestLines Include="  &quot;has_dll&quot;: true," />
       <ModManifestLines Include="  &quot;dependencies&quot;: []," />

@@ -2,7 +2,7 @@
 
 A native C# / Godot mod for **Slay the Spire 2**, with incoming-damage forecasts, a compact teammate hand viewer, a combat journal, and a movable damage meter.
 
-The mod ID and output filenames remain `BetterSpire2Lite`. The current manifest version is `3.5.3-compact-hud-preview`.
+The mod ID and output filenames remain `BetterSpire2Lite`. The current manifest version is `3.6.0-v111` and requires Slay the Spire 2 v0.111.0 or newer.
 
 ## Features
 
@@ -65,7 +65,7 @@ Or from a Bash environment with the SDK installed:
 bash build.sh
 ```
 
-Both scripts run all six C# test projects and then compile the mod. Successful builds produce:
+Both scripts run seven C# behavior suites, compile the mod, and then verify the v0.111 metadata and IL call contracts. The game-boundary suite links the actual lifecycle, observer, victory resolver and turn-order source against test doubles; it does not run the game engine. Successful builds produce:
 
 ```text
 dist/BetterSpire2Lite/
@@ -75,6 +75,15 @@ dist/BetterSpire2Lite/
 ```
 
 Build diagnostics are written to `build.log`. The scripts do not modify the game installation.
+
+### Native API integration (v0.111)
+
+- Combat setup and ready/undo notifications use native events. Guardian caches the event-provided combat state; a debug-state read is retained only for late initialization. Deferred native state notifications supplement immediate invalidation signals.
+- The early victory patch targets `EndCombatInternal(CombatTurnState)`, not its parameterless test wrapper. The journal still drains before native history is cleared; final combat events provide additional overlay/speed cleanup.
+- Forecast end-turn effects respect current extra-turn participants. Multi-target attacks are ordered by hit, then player. Unknown attack lifecycle hooks downgrade forecast confidence instead of executing gameplay callbacks.
+- Card titles retain native upgrade suffixes, and display costs preserve the native negative/no-energy-cost sentinel.
+
+In-game checks still required: normal victory and defeat, reset/retry, Instant-mode restoration, multiplayer ready/undo and extra turns, card/potion resolution, multi-hit attacks, and upgraded/negative-cost/X-cost card thumbnails. Passing the standalone tests is not an in-game certification.
 
 ## Install or update
 
@@ -107,7 +116,7 @@ To run only the HUD suite:
 dotnet run --project tests/Hud.Core.Tests.csproj --configuration Release
 ```
 
-The six suites and mod compilation passed locally for the HandViewer fix. These checks do not validate Godot rendering or actual game input. In-game verification remains necessary, particularly for overlay interactions, scaling, and compatibility with other mods.
+The behavior suites, v0.111 metadata contract, and mod compilation pass locally. These checks do not validate Godot rendering or actual game input. In-game verification remains necessary, particularly for overlay interactions, scaling, and compatibility with other mods.
 
 The obsolete Python audit runner and duplicate Python reference models have been removed. Python is **not required** to build or test the mod. The optional `tools/cli_reader.py` utility remains available for inspecting .NET assembly metadata and IL without executing the assembly:
 
@@ -119,7 +128,7 @@ python tools/cli_reader.py references/sts2.dll CombatManager --il
 ## Repository layout
 
 - `BetterSpire2/` — mod implementation, feature modules, UI, and game patches.
-- `tests/` — six C# test projects and their JSON fixtures.
+- `tests/` — six C# behavior projects, the v0.111 API contract, and their JSON fixtures.
 - `references/` — assemblies used for compilation.
 - `tools/cli_reader.py` — optional assembly inspection utility.
 - `build.cmd`, `build.ps1`, `build.sh` — test and packaging entry points.

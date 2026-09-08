@@ -675,7 +675,7 @@
     }
   },
   {
-    "Name": "future diadem before cap",
+    "Name": "generic attack multiplier before cap",
     "Input": {
       "Actors": [
         {
@@ -719,7 +719,7 @@
     }
   },
   {
-    "Name": "future diadem fractional damage",
+    "Name": "generic attack multiplier fractional damage",
     "Input": {
       "Actors": [
         {
@@ -762,7 +762,7 @@
     }
   },
   {
-    "Name": "diadem not on hp loss",
+    "Name": "generic attack multiplier not on hp loss",
     "Input": {
       "Actors": [
         {
@@ -2809,6 +2809,72 @@
         "HpLost": 1,
         "BlockGained": 3
       }
+    }
+  },
+  {
+    "Name": "v111 regen heals before end-turn damage",
+    "Input": {
+      "Actors": [
+        {
+          "Id": "p",
+          "Name": "Player",
+          "Hp": 5,
+          "MaxHp": 10,
+          "Block": 0,
+          "HpRules": [],
+          "DamageAlreadyReceived": 0,
+          "ReviveHp": 0,
+          "IsPlayer": true
+        }
+      ],
+      "Events": [
+        { "Kind": "Heal", "Target": "p", "Source": "Regen", "Amount": 3, "Phase": "Early" },
+        { "Kind": "Damage", "Target": "p", "Source": "Burn", "Amount": 7, "Phase": "Hand" }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": { "FinalHp": 1, "HpLost": 7, "Healed": 3 }
+    }
+  },
+  {
+    "Name": "v111 hibernate shares frost block with teammate",
+    "Input": {
+      "Actors": [
+        { "Id": "p1", "Name": "Owner", "Hp": 30, "MaxHp": 30, "Block": 0, "HpRules": [], "IsPlayer": true },
+        { "Id": "p2", "Name": "Teammate", "Hp": 30, "MaxHp": 30, "Block": 0, "HpRules": [], "IsPlayer": true }
+      ],
+      "Events": [
+        { "Kind": "Block", "Target": "p1", "Source": "Frost", "Amount": 5 },
+        { "Kind": "Block", "Target": "p2", "Source": "Frost / Hibernate", "Amount": 5 },
+        { "Kind": "Damage", "Target": "p2", "Source": "Attack", "Amount": 8 }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p1",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p1": { "BlockGained": 5, "FinalBlock": 5 },
+      "p2": { "BlockGained": 5, "BlockSpent": 5, "HpLost": 3 }
+    }
+  },
+  {
+    "Name": "v111 diamond diadem has no legacy attack multiplier",
+    "Input": {
+      "Actors": [
+        { "Id": "p", "Name": "Player", "Hp": 30, "MaxHp": 30, "Block": 0, "HpRules": [], "IsPlayer": true }
+      ],
+      "Events": [
+        { "Kind": "Damage", "Target": "p", "Source": "Attack", "Amount": 8, "PoweredAttack": true }
+      ],
+      "Warnings": [],
+      "LocalPlayerId": "p",
+      "EnemyIds": []
+    },
+    "Expected": {
+      "p": { "HpLost": 8, "FinalHp": 22 }
     }
   },
   {

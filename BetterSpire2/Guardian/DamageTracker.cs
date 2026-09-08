@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using BetterSpire2.Guardian.Core;
 using BetterSpire2.Guardian.Game;
@@ -67,7 +68,7 @@ public static class DamageTracker
         try
         {
             var manager = CombatManager.Instance;
-            var state = manager?.DebugOnlyGetState();
+            var state = CombatLifecycle.CurrentState;
             var local = state == null ? null : LocalContext.GetMe(state);
             if (!ModSettings.PlayerDamageTotal || manager == null || !manager.IsInProgress ||
                 manager.IsOverOrEnding || state == null || local == null || local.Creature.IsDead)
@@ -77,6 +78,7 @@ public static class DamageTracker
             Ledger.Update(state, local.Creature);
             bool resolving = manager.IsStarting || manager.IsEnemyTurnStarted || manager.EndingPlayerTurnPhaseOne ||
                 manager.EndingPlayerTurnPhaseTwo || manager.PlayerActionsDisabled ||
+                !manager.IsPartOfPlayerTurn(local) || state.Players.Any(manager.IsExecutingCardOrPotionEffect) ||
                 local.PlayerCombatState?.Phase != PlayerTurnPhase.Play || manager.IsPlayerReadyToEndTurn(local);
             if (resolving != _resolving)
             { _resolving = resolving; InvalidateForecast(); _statusRendered = false; }
@@ -134,7 +136,7 @@ public static class DamageTracker
         try
         {
             string path = Path.Combine(OS.GetUserDataDir(), "betterspire_guardian_forecast.json");
-            var dump = new { Version = "3.5.3-compact-hud-preview", GameModule = typeof(CombatState).Module.ModuleVersionId,
+            var dump = new { Version = "3.6.0-v111", GameModule = typeof(CombatState).Module.ModuleVersionId,
                 Forecast = _lastResult, Observed = new { Ledger.PlayerHpLost, Ledger.PlayerBlocked,
                     Ledger.PlayerBlockGained, Ledger.PetHpLost, Ledger.Recent } };
             File.WriteAllText(path, JsonSerializer.Serialize(dump, new JsonSerializerOptions { WriteIndented = true }));

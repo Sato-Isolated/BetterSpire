@@ -23,9 +23,9 @@ public static partial class TeammateHandViewer
         private static CardVisual ReadVisual(CardModel card)
         {
             string name = card.Title;
-            if (card.IsUpgraded && !name.EndsWith("+", StringComparison.Ordinal)) name += "+";
             var energy = card.EnergyCost;
-            int resolved = energy.GetResolved();
+            // Display costs preserve the negative sentinel; GetResolved clamps it to zero.
+            int resolved = energy.GetWithModifiers(CostModifiers.All);
             string cost = energy.CostsX ? "X" : resolved < 0 ? "—" : resolved.ToString();
             int stars = card.GetStarCostWithModifiers();
             if (card.HasStarCostX || stars > 0) cost += " · " + (card.HasStarCostX ? "X" : stars.ToString()) + " ★";

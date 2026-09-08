@@ -2,7 +2,6 @@
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Entities.Players;
 using System;
-using System.Reflection;
 
 namespace BetterSpire2.Patches.Combat;
 
@@ -12,18 +11,6 @@ namespace BetterSpire2.Patches.Combat;
 [HarmonyPatch(typeof(PlayerCombatState), nameof(PlayerCombatState.GainEnergy), new[] { typeof(decimal) })]
 internal static class PlayerCombatState_GainEnergy_Patch
 {
-    [HarmonyPrepare]
-    private static bool Prepare(MethodBase? original)
-    {
-        if (original is not null)
-        {
-            return true;
-        }
-
-        ModLog.Info($"{nameof(PlayerCombatState_GainEnergy_Patch)} skipped: target method not found.");
-        return false;
-    }
-
     [HarmonyPrefix]
     private static void Prefix(PlayerCombatState __instance, ref int __state)
     {

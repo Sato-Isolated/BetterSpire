@@ -9,6 +9,7 @@ using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Combat.History;
 using MegaCrit.Sts2.Core.Commands;
+using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Models;
@@ -19,14 +20,17 @@ namespace BetterSpire2.Patches.Combat;
 
 internal static class PoisonNativeMethods
 {
-    internal static MethodInfo? Damage(Type target) => AccessTools.Method(typeof(CreatureCmd),
-        nameof(CreatureCmd.Damage), new[] { typeof(PlayerChoiceContext), target, typeof(decimal),
-            typeof(ValueProp), typeof(Creature), typeof(CardModel) });
+    internal static MethodInfo? SingleDamage() => AccessTools.Method(typeof(CreatureCmd),
+        nameof(CreatureCmd.Damage), new[] { typeof(PlayerChoiceContext), typeof(Creature), typeof(decimal),
+            typeof(ValueProp), typeof(CardModel), typeof(CardPlay) });
+    internal static MethodInfo? ManyDamage() => AccessTools.Method(typeof(CreatureCmd),
+        nameof(CreatureCmd.Damage), new[] { typeof(PlayerChoiceContext), typeof(IEnumerable<Creature>), typeof(decimal),
+            typeof(ValueProp), typeof(Creature), typeof(CardModel), typeof(CardPlay) });
     internal static MethodInfo? MoveNext(MethodInfo? method) => method?
         .GetCustomAttribute<AsyncStateMachineAttribute>()?.StateMachineType.GetMethod("MoveNext",
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
     internal static MethodInfo? PoisonMoveNext() => MoveNext(AccessTools.Method(typeof(PoisonPower),
-        nameof(PoisonPower.AfterSideTurnStart)));
+        nameof(PoisonPower.Trigger)));
 }
 
 [HarmonyPatch]
@@ -35,7 +39,7 @@ internal static class Journal_PoisonDamageOrigin_Patch
     [HarmonyPrepare]
     private static bool Prepare()
     {
-        bool supported = PoisonNativeMethods.PoisonMoveNext() != null && PoisonNativeMethods.Damage(typeof(Creature)) != null;
+        bool supported = PoisonNativeMethods.PoisonMoveNext() != null && PoisonNativeMethods.SingleDamage() != null;
         if (!supported) ModLog.Info("Poison provenance unavailable: native signature changed; damage remains unattributed.");
         return supported;
     }
@@ -47,7 +51,7 @@ internal static class Journal_PoisonDamageOrigin_Patch
         MethodBase __originalMethod)
     {
         var code = instructions.ToList();
-        MethodInfo original = PoisonNativeMethods.Damage(typeof(Creature))!;
+        MethodInfo original = PoisonNativeMethods.SingleDamage()!;
         var ownerFields = __originalMethod.DeclaringType!.GetFields(BindingFlags.Instance |
             BindingFlags.Public | BindingFlags.NonPublic).Where(f => f.FieldType == typeof(PoisonPower)).ToArray();
         // Fail closed on an unfamiliar game version. Do not guess another call,
@@ -77,9 +81,9 @@ internal static class Journal_PoisonDamageOrigin_Patch
 internal static class Journal_DamageCommandScope_Patch
 {
     [HarmonyPrepare]
-    private static bool Prepare() => PoisonNativeMethods.Damage(typeof(IEnumerable<Creature>)) != null;
+    private static bool Prepare() => PoisonNativeMethods.ManyDamage() != null;
     [HarmonyTargetMethod]
-    private static MethodBase TargetMethod() => PoisonNativeMethods.Damage(typeof(IEnumerable<Creature>))!;
+    private static MethodBase TargetMethod() => PoisonNativeMethods.ManyDamage()!;
     [HarmonyPrefix]
     private static void Prefix(out IDisposable? __state)
     {
@@ -99,10 +103,10 @@ internal static class Journal_PoisonHistoryTag_Patch
 {
     [HarmonyPrepare]
     private static bool Prepare() => PoisonNativeMethods.MoveNext(
-        PoisonNativeMethods.Damage(typeof(IEnumerable<Creature>))) != null;
+        PoisonNativeMethods.ManyDamage()) != null;
     [HarmonyTargetMethod]
     private static MethodBase TargetMethod() => PoisonNativeMethods.MoveNext(
-        PoisonNativeMethods.Damage(typeof(IEnumerable<Creature>)))!;
+        PoisonNativeMethods.ManyDamage())!;
     [HarmonyTranspiler]
     private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
     {

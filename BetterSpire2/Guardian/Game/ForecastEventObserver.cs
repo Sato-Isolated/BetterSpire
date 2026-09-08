@@ -7,6 +7,7 @@ using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.TestSupport;
 
 namespace BetterSpire2.Guardian.Game;
 
@@ -16,6 +17,9 @@ internal sealed class ForecastEventObserver : IDisposable
     private readonly Action _changed;
     private CombatState? _state;
     private CombatHistory? _history;
+    private CombatManager? _manager;
+    private CombatId? _combatId;
+    private bool _nativeTrackerSubscribed;
     private readonly List<Creature> _creatures = new();
     private readonly List<Player> _players = new();
     private readonly List<PlayerCombatState> _playerStates = new();
@@ -32,8 +36,19 @@ internal sealed class ForecastEventObserver : IDisposable
         {
             Dispose();
             _state = state;
-            _history = CombatManager.Instance.History;
+            _manager = CombatManager.Instance;
+            _combatId = _manager.CurrentCombatId;
+            _history = _manager.History;
             _history.Changed += Changed;
+            // The game's tracker is a deferred UI notification, forbidden in backend
+            // TestMode. Keep immediate signals below as a stale-display fence.
+            if (!TestMode.IsOn)
+            {
+                _manager.StateTracker.CombatStateChanged += NativeStateChanged;
+                _nativeTrackerSubscribed = true;
+            }
+            _manager.PlayerEndedTurn += PlayerEndedTurn;
+            _manager.PlayerUnendedTurn += PlayerUnendedTurn;
             _state.CreaturesChanged += CreaturesChanged;
             _bindingsDirty = true;
             _changed();
@@ -49,7 +64,14 @@ internal sealed class ForecastEventObserver : IDisposable
             { _moves[monster] = move; _changed(); }
         }
     }
-    private void Changed() => _changed();
+    private void NativeStateChanged(CombatState state)
+    {
+        if (ReferenceEquals(_state, state) && _manager?.IsCurrentLiveCombat(_combatId) == true &&
+            !_manager.IsOverOrEnding) Rebind();
+    }
+    private void PlayerEndedTurn(Player _, bool canBackOut) => Changed();
+    private void PlayerUnendedTurn(Player _) => Changed();
+    private void Changed() { if (_state != null) _changed(); }
     private void ValuesChanged(int previous, int current) { if (previous != current) _changed(); }
     private void PowerChanged(PowerModel _) => _changed();
     private void PowerIncreased(PowerModel _, int amount, bool silent) => _changed();
@@ -105,6 +127,10 @@ internal sealed class ForecastEventObserver : IDisposable
                 card.EnchantmentChanged += Changed;
                 card.AfflictionChanged += Changed;
                 card.KeywordsChanged += Changed;
+                card.EnergyCostChanged += Changed;
+                card.StarCostChanged += Changed;
+                card.ReplayCountChanged += Changed;
+                card.Forged += Changed;
             }
         }
         _bindingsDirty = false;
@@ -137,6 +163,10 @@ internal sealed class ForecastEventObserver : IDisposable
             card.EnchantmentChanged -= Changed;
             card.AfflictionChanged -= Changed;
             card.KeywordsChanged -= Changed;
+            card.EnergyCostChanged -= Changed;
+            card.StarCostChanged -= Changed;
+            card.ReplayCountChanged -= Changed;
+            card.Forged -= Changed;
         }
         foreach (var relic in _relics)
         { relic.DisplayAmountChanged -= Changed; relic.StatusChanged -= Changed; }
@@ -146,8 +176,16 @@ internal sealed class ForecastEventObserver : IDisposable
     public void Dispose()
     {
         if (_history != null) _history.Changed -= Changed;
+        if (_manager != null)
+        {
+            if (_nativeTrackerSubscribed)
+                _manager.StateTracker.CombatStateChanged -= NativeStateChanged;
+            _manager.PlayerEndedTurn -= PlayerEndedTurn;
+            _manager.PlayerUnendedTurn -= PlayerUnendedTurn;
+        }
         if (_state != null) _state.CreaturesChanged -= CreaturesChanged;
         UnbindModels();
         _state = null; _history = null; _bindingsDirty = false;
+        _manager = null; _combatId = null; _nativeTrackerSubscribed = false;
     }
 }

@@ -50,7 +50,7 @@ internal sealed partial class GameForecastAdapter
 
     internal ForecastResult Capture()
     {
-        if (typeof(CombatState).Module.ModuleVersionId != new Guid("97f10687-c306-4798-ab75-8b9f23f34dfb"))
+        if (typeof(CombatState).Module.ModuleVersionId != new Guid("73b63ee0-6c0a-47bb-b0d1-b21f6d94222e"))
             Warn(T("Different game build: formulas require revalidation.", "Autre version du jeu : formules à revalider."));
         CapabilityAudit.Inspect(_runListeners.Concat(_combatListeners).Distinct(), Warn);
         if (_state.Players.Count > 1)
@@ -115,11 +115,11 @@ internal sealed partial class GameForecastAdapter
         dealer ??= card?.Owner?.Creature;
         if (!_ids.ContainsKey(target)) { Warn(T("Target unavailable.", "Cible indisponible.")); return; }
         decimal modified = Hook.ModifyDamage(_state.RunState, _state, target, dealer!, raw, props,
-            card!, ModifyDamageHookType.Additive | ModifyDamageHookType.Multiplicative,
+            card!, null, ModifyDamageHookType.Additive | ModifyDamageHookType.Multiplicative,
             CardPreviewMode.None, out _);
         decimal cap = decimal.MaxValue;
         foreach (var model in _runListeners)
-            cap = Math.Min(cap, model.ModifyDamageCap(target, props, dealer!, card!));
+            cap = Math.Min(cap, model.ModifyDamageCap(target, props, dealer!, card!, null));
         bool powered = (props & ValueProp.Move) != 0 && (props & ValueProp.Unpowered) == 0;
         _events.Add(new(ForecastEventKind.Damage, Id(target), source, modified,
             (props & ValueProp.Unblockable) != 0, powered, cap,

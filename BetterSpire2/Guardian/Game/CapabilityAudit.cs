@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Modding;
 
 namespace BetterSpire2.Guardian.Game;
 
@@ -20,6 +21,7 @@ internal static class CapabilityAudit
         "BeforeSideTurnEndVeryEarly", "BeforeSideTurnEndEarly", "BeforeSideTurnEnd",
         "AfterSideTurnEnd", "AfterSideTurnEndLate", "BeforeSideTurnStart", "AfterSideTurnStart",
         "BeforeDamageReceived", "AfterDamageReceived", "AfterCurrentHpChanged",
+        "BeforeAttack", "AfterAttack", "ModifyAttackHitCount",
         "BeforeBlockGained", "AfterBlockGained", "AfterBlockBroken", "AfterBlockCleared",
         "BeforeDeath", "AfterDeath", "AfterAutoPostPlayPhaseEntered",
         "ShouldTakeExtraTurn", "AfterTakingExtraTurn",
@@ -33,16 +35,17 @@ internal static class CapabilityAudit
     private static readonly Dictionary<string, HashSet<string>> Supported = new(StringComparer.Ordinal)
     {
         ["BeforeSideTurnEndVeryEarly"] = Set("Orichalcum", "FakeOrichalcum"),
-        ["BeforeSideTurnEndEarly"] = Set("PlatingPower"),
-        ["BeforeSideTurnEnd"] = Set("Orichalcum", "FakeOrichalcum", "CloakClasp", "RippleBasin", "DiamondDiadem", "Regret"),
-        ["AfterSideTurnEnd"] = Set("RegenPower", "ConstrictPower", "MagicBombPower", "DemisePower",
-            "WeakPower", "VulnerablePower", "FrailPower", "IntangiblePower", "DiamondDiademPower",
+        ["BeforeSideTurnEndEarly"] = Set("PlatingPower", "RegenPower"),
+        ["BeforeSideTurnEnd"] = Set("Orichalcum", "FakeOrichalcum", "CloakClasp", "RippleBasin", "Regret"),
+        ["AfterSideTurnEnd"] = Set("ConstrictPower", "MagicBombPower", "DemisePower",
+            "WeakPower", "VulnerablePower", "FrailPower", "IntangiblePower",
             // Its additive damage is already captured by Hook.ModifyDamage. Removal happens
             // after the enemy turn, once every attack included in this forecast has resolved.
             "TaintedPower"),
         ["AfterSideTurnEndLate"] = Set("DisintegrationPower"),
         ["BeforeSideTurnStart"] = Set("BeatingRemnant", "Orichalcum", "FakeOrichalcum"),
-        ["AfterSideTurnStart"] = Set("PoisonPower"),
+        ["AfterSideTurnStart"] = Set("PoisonPower", "DiamondDiadem"),
+        ["AfterPlayerTurnStart"] = Set("HibernatePower"),
         ["AfterDamageReceived"] = Set("BeatingRemnant", "SlipperyPower"),
         ["ShouldDieLate"] = Set("LizardTail"),
         ["ModifyUnblockedDamageTarget"] = Set("DieForYouPower"),
@@ -59,9 +62,10 @@ internal static class CapabilityAudit
         foreach (var model in models)
         {
             var type = model.GetType();
-            if (type.Assembly != typeof(AbstractModel).Assembly)
+            if (!IsBaseGame(type, out string owner))
             {
-                warn((ModText.IsFrench ? "Mod externe non certifié : " : "Uncertified external mod: ") + type.Name);
+                warn((ModText.IsFrench ? "Mod externe non certifié : " : "Uncertified external mod: ") +
+                    owner + " / " + type.Name);
                 continue;
             }
             if (!UnknownByType.TryGetValue(type, out var unknown))
@@ -86,7 +90,7 @@ internal static class CapabilityAudit
         foreach (var model in models)
         {
             var type = model.GetType();
-            if (type.Assembly != typeof(AbstractModel).Assembly ||
+            if (!IsBaseGame(type, out _) ||
                 Overrides(type, "AfterDeath") || Overrides(type, "BeforeDeath") ||
                 Overrides(type, "ShouldDie") || Overrides(type, "ShouldDieLate")) return true;
         }
@@ -106,5 +110,22 @@ internal static class CapabilityAudit
     private static bool IsSupported(string type, string hook) =>
         Supported.TryGetValue(hook, out var types) && types.Contains(type) ||
         hook.StartsWith("AfterModifying", StringComparison.Ordinal) && SafeAfterModification.Contains(type);
+
+    private static bool IsBaseGame(Type type, out string owner)
+    {
+        owner = type.Assembly.GetName().Name ?? "unknown";
+        try
+        {
+            var mod = AssemblyInfo.ModForType(type, out bool isBaseGame);
+            if (isBaseGame) return true;
+            owner = mod?.manifest?.name ?? mod?.manifest?.id ?? owner;
+            return false;
+        }
+        catch
+        {
+            // AssemblyInfo is initialized by the game, but pure tests and early startup may not have its map yet.
+            return type.Assembly == typeof(AbstractModel).Assembly;
+        }
+    }
     private static HashSet<string> Set(params string[] values) => new(values, StringComparer.Ordinal);
 }

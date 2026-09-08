@@ -13,10 +13,8 @@ public class ModEntry
 
     private static bool _initialized;
 
-    private static readonly Type[] _combatPatches = new Type[13]
+    private static readonly Type[] _combatPatches = new Type[11]
     {
-        typeof(CombatManager_SetReadyToEndTurn_Patch),
-        typeof(CombatManager_SetUpCombat_Patch),
         typeof(CombatManager_Reset_Patch),
         typeof(CombatManager_EndCombatInternal_Patch),
         typeof(CombatManager_LoseCombat_Patch),
@@ -92,7 +90,7 @@ public class ModEntry
         PatchGroup(harmony, "UI", _uiPatches, ref succeeded, ref failed);
         PatchGroup(harmony, "Map", _mapPatches, ref succeeded, ref failed);
         ModLog.Info($"Harmony patching complete: {succeeded} succeeded, {failed} failed");
-        ModLog.Info("ModEntry.Init() complete — Guardian 3.5.3 compact HUD preview");
+        ModLog.Info("ModEntry.Init() complete — BetterSpire 3.6.0 for game v0.111");
         ModRuntime.EnsureStarted();
         if (ModSettings.ShowClock)
         {

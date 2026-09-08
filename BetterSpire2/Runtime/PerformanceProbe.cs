@@ -90,7 +90,7 @@ internal static class PerformanceProbe
             var gcCollections = new int[3];
             for (int i = 0; i < 3; i++) gcCollections[i] = (_enabled ? GC.CollectionCount(i) : _gcEnd[i]) - _gcStart[i];
             string path = Path.Combine(OS.GetUserDataDir(), "betterspire_performance.json");
-            var report = new { Version = "3.5.3-compact-hud-preview", StartedUtc = _startedUtc,
+            var report = new { Version = "3.6.0-v111", StartedUtc = _startedUtc,
                 Recording = _enabled, FrameCount = _frames,
                 MeanFrameMs = _frames == 0 ? 0 : Milliseconds(_frameTicks) / _frames,
                 MeanFps = _frameTicks == 0 ? 0 : _frames * (double)Stopwatch.Frequency / _frameTicks,

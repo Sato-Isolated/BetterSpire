@@ -17,6 +17,10 @@ internal sealed partial class GameForecastAdapter
 {
     private void BuildPlayerEndTurn()
     {
+        // Extra turns can belong to only part of the party. This is the CURRENT
+        // participant set, not a prediction of who will receive another extra turn.
+        var playersEndingTurn = ForecastTurnOrder.Participants(_state.Players, CombatManager.Instance.IsPartOfPlayerTurn);
+        var participants = playersEndingTurn.Select(p => p.Creature).ToHashSet();
         string early = T("End turn / early", "Fin de tour / anticipé");
         string before = T("End turn / relics", "Fin de tour / reliques");
         string handPhase = T("End turn / hand", "Fin de tour / main");
@@ -24,14 +28,26 @@ internal sealed partial class GameForecastAdapter
         // VeryEarly only latches Orichalcum; Plating runs in Early, then latches fire.
         // Both versions of Orichalcum evaluate the same pre-Early block, not each other's gain.
         var orichalcum = _combatListeners.OfType<RelicModel>()
-            .Where(r => (r is Orichalcum || r is FakeOrichalcum) && r.Owner.Creature.Block <= 0)
+            .Where(r => (r is Orichalcum || r is FakeOrichalcum) && participants.Contains(r.Owner.Creature) && r.Owner.Creature.Block <= 0)
             .ToHashSet();
-        foreach (var model in _combatListeners)
-            if (model is PlatingPower plating && plating.Owner.Side == CombatSide.Player)
-                Block(plating.Owner, plating.Amount, ValueProp.Unpowered, Source(plating), early);
+        // v0.111 runs both effects in BeforeSideTurnEndEarly, before relics and hand effects.
         foreach (var model in _combatListeners)
         {
-            if (model is not RelicModel relic || relic.Owner.Creature.Side != CombatSide.Player) continue;
+            switch (model)
+            {
+                case PlatingPower plating when participants.Contains(plating.Owner):
+                    Block(plating.Owner, plating.Amount, ValueProp.Unpowered, Source(plating), early);
+                    break;
+                case RegenPower regen when participants.Contains(regen.Owner) &&
+                    regen.Amount > 0 && regen.Owner.IsAlive:
+                    _events.Add(new(ForecastEventKind.Heal, Id(regen.Owner), Source(regen), regen.Amount,
+                        Phase: early));
+                    break;
+            }
+        }
+        foreach (var model in _combatListeners)
+        {
+            if (model is not RelicModel relic || !participants.Contains(relic.Owner.Creature)) continue;
             switch (relic)
             {
                 case Orichalcum or FakeOrichalcum when orichalcum.Contains(relic):
@@ -40,20 +56,14 @@ internal sealed partial class GameForecastAdapter
                     RelicBlock(relic, relic.Owner.PlayerCombatState?.Hand.Cards.Count ?? 0, before); break;
                 case RippleBasin:
                     bool attacked = CombatManager.Instance.History.CardPlaysFinished.Any(entry =>
-                        entry.HappenedThisTurn(_state) && entry.CardPlay.Card.Owner == relic.Owner &&
+                        entry.HappenedThisTurn(_state) && entry.CardPlay.Player == relic.Owner &&
                         entry.CardPlay.Card.Type == CardType.Attack);
                     if (!attacked) RelicBlock(relic, 1, before);
-                    break;
-                case DiamondDiadem diadem:
-                    if (diadem.DisplayAmount <= Var(diadem.DynamicVars, "CardThreshold") &&
-                        diadem.Owner.Creature.GetPower<DiamondDiademPower>() == null)
-                        _events.Add(new(ForecastEventKind.AttackMultiplier, Id(diadem.Owner.Creature),
-                            Source(diadem), .5m, Phase: before));
                     break;
             }
         }
         // Per-player DoTurnEnd: orbs -> ethereal exhaustion -> the snapshotted hand effects.
-        foreach (var player in _state.Players)
+        foreach (var player in playersEndingTurn)
         {
             var combat = player.PlayerCombatState;
             if (combat == null || !player.Creature.IsAlive) continue;
@@ -65,8 +75,17 @@ internal sealed partial class GameForecastAdapter
                         int count = Hook.ModifyOrbPassiveTriggerCount(_state, orb, 1, out _);
                         if (count < 0 || count > 1000) throw new InvalidOperationException("Invalid orb trigger count.");
                         for (int i = 0; i < count; i++)
+                        {
                             Block(player.Creature, frost.PassiveVal, ValueProp.Unpowered,
                                 T("Frost orb", "Orbe de givre"), T("End turn / orbs", "Fin de tour / orbes"));
+                            // Hibernate makes each Frost passive grant the same block to every teammate.
+                            if (player.Creature.GetPower<HibernatePower>() != null)
+                                foreach (var teammate in _state.Players)
+                                    if (!ReferenceEquals(teammate, player))
+                                        Block(teammate.Creature, frost.PassiveVal, ValueProp.Unpowered,
+                                            T("Frost orb / Hibernate", "Orbe de givre / Hibernation"),
+                                            T("End turn / orbs", "Fin de tour / orbes"));
+                        }
                     }
                     else if (orb.GetType().Name is not ("DarkOrb" or "PlasmaOrb"))
                         Warn(T("Offensive/custom orb: enemy deaths are not fully simulated.",
@@ -119,12 +138,9 @@ internal sealed partial class GameForecastAdapter
         // Do NOT regroup damage before/after healing: listener order is gameplay order.
         foreach (var model in _combatListeners)
         {
-            if (model is not PowerModel power || power.Owner.Side != CombatSide.Player || power.Amount <= 0) continue;
+            if (model is not PowerModel power || !participants.Contains(power.Owner) || power.Amount <= 0) continue;
             switch (power)
             {
-                case RegenPower:
-                    _events.Add(new(ForecastEventKind.Heal, Id(power.Owner), Source(power), power.Amount, Phase: after));
-                    break;
                 case ConstrictPower:
                     Damage(power.Owner, power.Amount, ValueProp.Unpowered, Source(power), after, power.Owner);
                     break;
@@ -138,7 +154,7 @@ internal sealed partial class GameForecastAdapter
             }
         }
         foreach (var model in _combatListeners)
-            if (model is DisintegrationPower power && power.Owner.Side == CombatSide.Player)
+            if (model is DisintegrationPower power && participants.Contains(power.Owner))
                 Damage(power.Owner, power.Amount, ValueProp.Unpowered, Source(power),
                     T("End turn / late", "Fin de tour / tardif"), power.Owner);
     }

@@ -58,14 +58,14 @@ internal sealed partial class GameForecastAdapter
                 if (attack is not (SingleAttackIntent or MultiAttackIntent))
                     Warn(T("Custom attack intent: targeting/order not certified.",
                         "Intention d'attaque personnalisée : ciblage/ordre non certifié."));
-                foreach (var player in _state.Players)
+                // AttackCommand resolves one hit across the targets before its next hit.
+                foreach (var (player, hit) in ForecastTurnOrder.AttackHits(_state.Players, repeats))
                 {
                     if (!player.Creature.IsAlive) continue;
-                    for (int hit = 0; hit < repeats; hit++)
-                        Damage(player.Creature, raw, ValueProp.Move,
-                            enemy.Name + (repeats > 1 ? $" ({hit + 1}/{repeats})" : ""),
-                            T("Enemy attacks", "Attaques ennemies"), enemy,
-                            requireDealer: true, stopOnVictory: true);
+                    Damage(player.Creature, raw, ValueProp.Move,
+                        enemy.Name + (repeats > 1 ? $" ({hit + 1}/{repeats})" : ""),
+                        T("Enemy attacks", "Attaques ennemies"), enemy,
+                        requireDealer: true, stopOnVictory: true);
                 }
             }
         }

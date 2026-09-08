@@ -18,6 +18,7 @@ internal static class CombatManager_Reset_Patch
     [HarmonyPostfix]
     private static void Postfix()
     {
+        Safe(CombatLifecycle.ForgetCombat);
         Safe(DamageTracker.Hide);
         Safe(TeammateHandViewer.Stop);
         Safe(JournalController.Hide);

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>13</LangVersion>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>$(NoWarn);CS0067</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="GameBoundaryTests.cs" />
+    <Compile Include="GameBoundaryDoubles.cs" />
+    <Compile Include="../BetterSpire2/Runtime/CombatLifecycle.cs" Link="CombatLifecycle.cs" />
+    <Compile Include="../BetterSpire2/Guardian/Game/ForecastEventObserver.cs" Link="ForecastEventObserver.cs" />
+    <Compile Include="../BetterSpire2/Guardian/Game/ForecastTurnOrder.cs" Link="ForecastTurnOrder.cs" />
+    <Compile Include="../BetterSpire2/Patches/Combat/HideOnWinPatch.cs" Link="HideOnWinPatch.cs" />
+  </ItemGroup>
+</Project>
