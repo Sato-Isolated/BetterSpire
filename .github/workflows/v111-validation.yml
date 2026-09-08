@@ -1,0 +1,50 @@
+name: v111 validation
+on:
+  push:
+    branches: [fix/v111-native-journal-meter]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            9.0.x
+            8.0.x
+      - name: Behavior suites and native metadata contracts
+        run: bash build.sh
+      - name: Inspect native API implementations
+        if: always()
+        run: |
+          dotnet tool install ilspycmd --tool-path /tmp/ilspy --version 9.1.0.7988
+          mkdir -p /tmp/native-v111
+          for type in MegaCrit.Sts2.Core.Models.CardModel MegaCrit.Sts2.Core.Localization.DynamicVars.DynamicVarSet MegaCrit.Sts2.Core.Combat.History.CombatHistoryEntry MegaCrit.Sts2.Core.Entities.Creatures.DamageResult MegaCrit.Sts2.Core.Models.Powers.DoomPower MegaCrit.Sts2.Core.Models.Powers.PoisonPower MegaCrit.Sts2.Core.Models.Relics.BeatingRemnant MegaCrit.Sts2.Core.MonsterMoves.Intents.AttackIntent MegaCrit.Sts2.Core.Combat.CombatStateTracker MegaCrit.Sts2.Core.Combat.CombatManager MegaCrit.Sts2.Core.Commands.CreatureCmd; do
+            echo "===== $type ====="
+            /tmp/ilspy/ilspycmd -t "$type" references/v111/sts2.dll > "/tmp/native-v111/${type##*.}.cs"
+            if [[ "$type" == *CardModel || "$type" == *CombatManager || "$type" == *CreatureCmd ]]; then
+              python3 - "$type" "/tmp/native-v111/${type##*.}.cs" <<'PY'
+          import re, sys
+          lines = open(sys.argv[2]).read().splitlines()
+          names = ('Clone', 'Preview', 'GetDescriptionForPile', 'CombatSetUp', 'CombatEnded', 'Reset(', 'EndCombatInternal', 'ExecuteEnemyTurn', 'DoTurnEnd', 'History.Clear', 'DamageReceived(', 'Doom', 'CombatStateChanged')
+          selected = set()
+          for i, line in enumerate(lines):
+              if any(n in line for n in names):
+                  selected.update(range(max(0, i-3), min(len(lines), i+38)))
+          for i in sorted(selected): print(f'{i+1}: {lines[i]}')
+          PY
+            else
+              cat "/tmp/native-v111/${type##*.}.cs"
+            fi
+          done
+      - name: Upload mod build (not game references)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BetterSpire-v111
+          path: dist/BetterSpire2Lite/
+          if-no-files-found: error
