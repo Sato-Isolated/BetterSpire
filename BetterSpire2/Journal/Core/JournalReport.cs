@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace BetterSpire2.Journal.Core;
 
-public sealed record JournalRow(string Label, string Value, string? CombatKey = null);
+public sealed record JournalRow(string Label, string Value, string? CombatKey = null, string? Detail = null);
 public sealed class JournalReport
 {
     public string Context { get; init; } = "";
@@ -23,7 +23,7 @@ public sealed class JournalReport
 public static class JournalReportBuilder
 {
     public const int RowsPerPage = 6;
-    public static JournalReport Build(JournalSession session, JournalSelection selection, bool sources, int page, bool french, bool runDetails = false)
+    public static JournalReport Build(JournalSession session, JournalSelection selection, bool sources, int page, bool french, bool runDetails = false, bool timeline = false)
     {
         string T(string en, string fr) => french ? fr : en;
         string N(long n) => n.ToString("N0", CultureInfo.GetCultureInfo(french ? "fr-FR" : "en-US"));
@@ -47,7 +47,12 @@ public static class JournalReportBuilder
         };
         var rows = new List<JournalRow>();
         string section;
-        if (sources)
+        if (timeline && selection.Scope != JournalScope.Run)
+        {
+            section = T("Damage timeline · hover for attribution", "Chronologie des dégâts · survol : attribution");
+            rows.AddRange(DamageTraceReport.Rows(run, combat, selection, french));
+        }
+        else if (sources)
         {
             section = T("Cards & identified sources", "Cartes et sources identifiées");
             foreach (var source in stats.Sources.Values.OrderByDescending(s => s.Stats[Stat.DamageDealtHp])
@@ -106,6 +111,13 @@ public static class JournalReportBuilder
             T("Actual combat values. Healing does not erase HP lost.", "Valeurs réelles de combat. Les soins n’effacent pas les PV perdus.");
         if (!partial && combat?.ReplacedAttempts > 0 && selection.Scope != JournalScope.Run)
             note = T("Reloaded combat: old attempt replaced, not added.", "Combat rechargé : l’ancienne tentative est remplacée, pas additionnée.");
+        if (timeline && selection.Scope != JournalScope.Run)
+            note = combat?.DamageTraceVersion != 1
+                ? T("Legacy combat: totals are available, but no timeline was recorded.", "Ancien combat : totaux disponibles, sans chronologie enregistrée.")
+                : combat.DamageTraceTruncated
+                ? T("Old trace rows were pruned; aggregate totals are unchanged.", "Anciennes lignes retirées ; les totaux restent inchangés.")
+                : T("Native results. Poison shares are conventional. Pre-damage reductions are not reconstructed.",
+                    "Résultats natifs. Parts de poison conventionnelles. Réductions initiales non reconstituées.");
         int pages = Math.Max(1, (rows.Count + RowsPerPage - 1) / RowsPerPage);
         page = Math.Clamp(page, 0, pages - 1);
         return new JournalReport { Context = context, Player = player, Section = section, Note = note,

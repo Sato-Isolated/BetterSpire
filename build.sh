@@ -17,29 +17,33 @@ fi
 for ref in sts2.dll GodotSharp.dll 0Harmony.dll; do
     test -f "$ROOT/references/$ref"
 done
-echo '1/9 Running C# simulator and overhead HUD tests...'
+echo '1/11 Running C# simulator and overhead HUD tests...'
 dotnet run --project tests/Guardian.Core.Tests.csproj --configuration Release
-echo '2/9 Running C# journal tests...'
+echo '2/11 Running C# journal tests...'
 dotnet run --project tests/Journal.Core.Tests.csproj --configuration Release
-echo '3/9 Running C# run damage meter tests...'
+echo '3/11 Running C# run damage meter tests...'
 dotnet run --project tests/DamageMeter.Core.Tests.csproj --configuration Release
-echo '4/9 Running C# refresh/cache/checkpoint regression tests...'
+echo '4/11 Running C# refresh/cache/checkpoint regression tests...'
 dotnet run --project tests/Performance.Core.Tests.csproj --configuration Release
-echo '5/9 Running C# HUD dependency, navigation and geometry tests...'
+echo '5/11 Running C# HUD dependency, navigation and geometry tests...'
 dotnet run --project tests/Hud.Core.Tests.csproj --configuration Release
-echo '6/9 Running C# poison provenance and async isolation tests...'
+echo '6/11 Running C# poison provenance and async isolation tests...'
 dotnet run --project tests/Poison.Core.Tests.csproj --configuration Release
-echo '7/9 Running source-linked game-boundary tests...'
+echo '7/11 Running source-linked game-boundary tests...'
 dotnet run --project tests/GameBoundary.Core.Tests.csproj --configuration Release
-echo '8/9 Building mod...'
+echo '8/11 Checking native journal accounting and damage chronology...'
+dotnet run --project tests/NativeJournal.Core.Tests.csproj --configuration Release
+echo '9/11 Checking isolated previews and forecast coverage...'
+dotnet run --project tests/NativePreview.Core.Tests.csproj --configuration Release
+echo '10/11 Building mod...'
 dotnet build BetterSpire2Lite.csproj --configuration Release --nologo
-echo '9/9 Checking v0.111 metadata contract and patch targets...'
+echo '11/11 Checking v0.111 metadata contract and patch targets...'
 dotnet run --project tests/GameApiCompatibility.Tests.csproj --configuration Release
 OUT="$ROOT/bin/Release/net9.0"
 test -s "$OUT/BetterSpire2Lite.dll"
 test -s "$OUT/BetterSpire2Lite.json"
 mkdir -p "$DEST"
 cp "$OUT/BetterSpire2Lite.dll" "$OUT/BetterSpire2Lite.json" "$DEST/"
-printf 'Built locally: %s\nC# core/overhead/journal/damage-meter/performance/HUD/poison/game-boundary/v0.111-API-IL-contract tests and mod compilation: passed.\nIn-game validation: NOT performed.\n' "$(date -u +%FT%TZ)" > "$DEST/BUILD-SUCCESS.txt"
+printf 'Build timestamp: %s\nC# core/overhead/journal/damage-meter/performance/HUD/poison/game-boundary/native-journal/preview-isolation/v0.111-API-IL-contract tests and mod compilation: passed.\nIn-game validation: NOT performed.\n' "$(date -u +%FT%TZ)" > "$DEST/BUILD-SUCCESS.txt"
 echo "SUCCESS: $DEST"
 echo 'Install only the DLL and JSON manifest. Never copy references/ into the game.'

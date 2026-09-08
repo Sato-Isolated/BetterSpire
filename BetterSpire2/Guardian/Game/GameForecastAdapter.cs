@@ -56,6 +56,9 @@ internal sealed partial class GameForecastAdapter
         if (_state.Players.Count > 1)
             Warn(T("Team actions and targeting may change this forecast.",
                 "Les actions et le ciblage en équipe peuvent modifier cette prévision."));
+        if (_combatListeners.OfType<DoomPower>().Any(p => p.Amount > 0))
+            Warn(T("Doom: death checks and chained reactions are not simulated; healing/orbs can change the outcome.",
+                "Doom : seuils de mort et réactions en chaîne non simulés ; soins/orbes peuvent modifier le résultat."));
         var actors = _creatures.Select(CaptureActor).ToArray();
         BuildPlayerEndTurn();
         BuildEnemyTurn();

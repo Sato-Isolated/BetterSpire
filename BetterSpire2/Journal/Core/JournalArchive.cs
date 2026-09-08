@@ -62,6 +62,7 @@ public sealed class JournalArchive
                 c.LatestRound < 0 || c.LatestRound > 1000000 || !Enum.IsDefined(c.Outcome)) ||
             run.Combats.Select(c => c.Key).Distinct(StringComparer.Ordinal).Count() != run.Combats.Count)
             throw new InvalidDataException("Invalid journal identities.");
+        DamageTraceBuffer.Validate(run);
         foreach (var combat in run.Combats)
         {
             if (combat.Rounds.Select(r => r?.Number).Distinct().Count() != combat.Rounds.Count)

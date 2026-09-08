@@ -1,0 +1,46 @@
+name: v111 validation
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
+        with:
+          dotnet-version: 9.0.x
+      - name: Behavior suites and native metadata contracts (Linux)
+        if: runner.os == 'Linux'
+        run: bash build.sh
+      - name: Behavior suites and native metadata contracts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./build.ps1
+      - name: Record source revision and source archive
+        shell: bash
+        run: |
+          git rev-parse HEAD >> dist/BetterSpire2Lite/BUILD-SUCCESS.txt
+          git archive --format=zip --output=BetterSpire-sources.zip HEAD BetterSpire2 tests BetterSpire2Lite.csproj build.sh build.ps1 build.cmd README.md global.json NuGet.Config Properties .github/workflows/v111-validation.yml
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: BetterSpire-v111-${{ runner.os }}
+          path: dist/BetterSpire2Lite/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: runner.os == 'Linux'
+        with:
+          name: BetterSpire-sources
+          path: BetterSpire-sources.zip
+          if-no-files-found: error

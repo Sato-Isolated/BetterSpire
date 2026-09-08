@@ -97,6 +97,11 @@ public sealed class CombatRecord
     public CombatOutcome Outcome { get; set; }
     public bool Partial { get; set; }
     public int ReplacedAttempts { get; set; }
+    // Zero means a legacy archive with totals but no chronological trace.
+    public int DamageTraceVersion { get; set; }
+    public bool DamageTraceTruncated { get; set; }
+    public long LastDamageSequence { get; set; }
+    public List<DamageTraceEntry> DamageTrace { get; set; } = new();
     public List<RoundRecord> Rounds { get; set; } = new();
 }
 public sealed class RunJournal

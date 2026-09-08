@@ -13,7 +13,7 @@ public class ModEntry
 
     private static bool _initialized;
 
-    private static readonly Type[] _combatPatches = new Type[11]
+    private static readonly Type[] _combatPatches = new Type[]
     {
         typeof(CombatManager_Reset_Patch),
         typeof(CombatManager_EndCombatInternal_Patch),
@@ -23,7 +23,6 @@ public class ModEntry
         typeof(Journal_BlockClearDecision_Patch),
         typeof(PlayerCombatState_GainEnergy_Patch),
         typeof(Journal_HistoryClear_Patch),
-        typeof(Journal_RunLaunch_Patch),
         typeof(Journal_RunCleanup_Patch),
         typeof(Journal_Healing_Patch)
     };
@@ -90,7 +89,7 @@ public class ModEntry
         PatchGroup(harmony, "UI", _uiPatches, ref succeeded, ref failed);
         PatchGroup(harmony, "Map", _mapPatches, ref succeeded, ref failed);
         ModLog.Info($"Harmony patching complete: {succeeded} succeeded, {failed} failed");
-        ModLog.Info("ModEntry.Init() complete — BetterSpire 3.6.0 for game v0.111");
+        ModLog.Info("ModEntry.Init() complete — BetterSpire 3.6.1 for game v0.111");
         ModRuntime.EnsureStarted();
         if (ModSettings.ShowClock)
         {

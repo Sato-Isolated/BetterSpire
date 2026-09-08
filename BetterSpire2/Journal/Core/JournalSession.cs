@@ -11,22 +11,26 @@ public sealed class JournalSession
     public RunJournal? Run { get; private set; }
     public CombatRecord? Active { get; private set; }
     public long Revision { get; private set; }
+    // Presentation/coverage changes and outgoing HP/block only, not every draw or energy event.
+    public long DamageRevision { get; private set; }
+    private readonly DamageTraceBuffer _trace = new();
     public DamageTotalsIndex DamageIndex { get; } = new();
     public DamageTotalsIndex CombatDamageIndex { get; } = new();
     private readonly Dictionary<int, RoundRecord> _roundIndex = new();
     public void Attach(RunJournal run)
     {
         Run = run ?? throw new ArgumentNullException(nameof(run));
+        _trace.Reset(run);
         Active = null;
         _roundIndex.Clear(); DamageIndex.Rebuild(run); CombatDamageIndex.Clear();
-        Revision++;
+        Revision++; DamageRevision++;
     }
     public void RegisterPlayer(JournalPlayer player)
     {
         if (Run == null || string.IsNullOrEmpty(player.Id)) return;
         if (Run.Players.TryGetValue(player.Id, out var old) && old.Name == player.Name && old.IsLocal == player.IsLocal) return;
         Run.Players[player.Id] = player;
-        Revision++;
+        Revision++; DamageRevision++;
     }
     public CombatRecord BeginCombat(string key, string encounter, int act, int floor, bool partial)
     {
@@ -39,12 +43,13 @@ public sealed class JournalSession
         if (existing >= 0) Run.Combats.RemoveRange(existing, Run.Combats.Count - existing);
         else Run.Combats.RemoveAll(c => c.Floor > floor);
         Active = new CombatRecord { Key = key, Encounter = encounter, Act = act, Floor = floor,
-            Partial = partial, ReplacedAttempts = attempts };
+            Partial = partial, ReplacedAttempts = attempts, DamageTraceVersion = 1 };
         Run.Combats.Add(Active);
         _roundIndex.Clear(); CombatDamageIndex.Clear();
         if (Run.Combats.Count > 512) { Run.Combats.RemoveAt(0); Run.Partial = true; }
         DamageIndex.Rebuild(Run); // Load/replay boundaries only, never each HUD refresh.
-        Revision++;
+        _trace.Reset(Run);
+        Revision++; DamageRevision++;
         return Active;
     }
     public void ObserveRound(int number)
@@ -69,6 +74,7 @@ public sealed class JournalSession
         DamageIndex.Add(item.PlayerId, item.Metric, delta);
         CombatDamageIndex.Add(item.PlayerId, item.Metric, delta);
         Revision++;
+        if (delta > 0 && item.Metric is Stat.DamageDealtHp or Stat.DamageDealtBlocked) DamageRevision++;
     }
     public void AppendUnattributed(int round, Stat metric, long amount)
     {
@@ -82,6 +88,15 @@ public sealed class JournalSession
         DamageIndex.AddUnattributed(metric, delta);
         CombatDamageIndex.AddUnattributed(metric, delta);
         Revision++;
+        if (delta > 0 && metric is Stat.DamageDealtHp or Stat.DamageDealtBlocked) DamageRevision++;
+    }
+    /// <summary>Primitive native results only. Recording an explanation never increments damage totals.</summary>
+    public void RecordDamageTrace(DamageTraceEntry entry)
+    {
+        if (Run == null || Active?.Outcome != CombatOutcome.InProgress) return;
+        ObserveRound(entry.Round);
+        _trace.Append(Run, Active, entry);
+        Revision++;
     }
     private RoundRecord? GetRound(int number)
     {
@@ -91,7 +106,7 @@ public sealed class JournalSession
         if (!_roundIndex.TryGetValue(round, out var bucket))
         {
             // Pathological infinite fights cannot consume unbounded memory.
-            if (Active.Rounds.Count >= 4096) { Active.Partial = true; Revision++; return null; }
+            if (Active.Rounds.Count >= 4096) { Active.Partial = true; Revision++; DamageRevision++; return null; }
             bucket = new RoundRecord { Number = round };
             Active.Rounds.Add(bucket);
             _roundIndex[round] = bucket;
@@ -114,7 +129,7 @@ public sealed class JournalSession
     {
         if (Active == null || Active.Partial) return;
         Active.Partial = true;
-        Revision++;
+        Revision++; DamageRevision++;
     }
     public void Complete(CombatOutcome outcome)
     {
@@ -122,14 +137,14 @@ public sealed class JournalSession
         // A late generic teardown must not replace a known win or defeat.
         if (Active.Outcome != CombatOutcome.InProgress && outcome == CombatOutcome.Interrupted) return;
         Active.Outcome = outcome;
-        Revision++;
+        Revision++; DamageRevision++;
     }
-    public void DetachCombat() { Active = null; _roundIndex.Clear(); CombatDamageIndex.Clear(); Revision++; }
+    public void DetachCombat() { Active = null; _roundIndex.Clear(); CombatDamageIndex.Clear(); Revision++; DamageRevision++; }
     public void SetRunStatus(string status)
     {
         if (Run == null || Run.Status == status) return;
         Run.Status = status;
-        Revision++;
+        Revision++; DamageRevision++;
     }
     public StatLine QueryTotals(JournalScope scope, string? combatKey, int round, string? playerId)
     {

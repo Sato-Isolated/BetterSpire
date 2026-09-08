@@ -25,7 +25,9 @@ public sealed class JournalCheckpoint
         {
             bool completed = combat.Outcome != CombatOutcome.InProgress;
             if (!completed || !_completed.TryGetValue(combat, out var snapshot) ||
-                snapshot.Outcome != combat.Outcome || snapshot.Partial != combat.Partial || snapshot.LatestRound != combat.LatestRound)
+                snapshot.Outcome != combat.Outcome || snapshot.Partial != combat.Partial || snapshot.LatestRound != combat.LatestRound ||
+                snapshot.DamageTrace.Count != combat.DamageTrace.Count || snapshot.DamageTraceTruncated != combat.DamageTraceTruncated ||
+                snapshot.LastDamageSequence != combat.LastDamageSequence)
             {
                 snapshot = CopyCombat(combat);
                 if (completed) _completed[combat] = snapshot;
@@ -42,6 +44,10 @@ public sealed class JournalCheckpoint
     {
         var copy = new CombatRecord { Key = source.Key, Encounter = source.Encounter, Act = source.Act, Floor = source.Floor,
             LatestRound = source.LatestRound, Outcome = source.Outcome, Partial = source.Partial, ReplacedAttempts = source.ReplacedAttempts };
+        copy.DamageTraceVersion = source.DamageTraceVersion;
+        copy.DamageTraceTruncated = source.DamageTraceTruncated;
+        copy.LastDamageSequence = source.LastDamageSequence;
+        copy.DamageTrace = source.DamageTrace.ConvertAll(e => e.Snapshot(e.Sequence));
         foreach (var round in source.Rounds)
         {
             var bucket = new RoundRecord { Number = round.Number, UnattributedDamage = CopyLine(round.UnattributedDamage) };
