@@ -1,4 +1,4 @@
-name: Apply and validate v111 journal
+name: Apply and validate v111 native integration
 on:
   push:
     branches: [fix/v111-native-journal-meter]
@@ -14,27 +14,31 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
-      - name: Verify reviewed patch and apply
+      - name: Apply reviewed native source changes
         run: |
-          cat .github/migrations/stage1.*.b64 | base64 --decode | gzip --decompress > /tmp/v111.patch
-          echo '1fc00899d82b785c99fce9f4615223edb46c07177442e3c248c9a45d069495e0  /tmp/v111.patch' | sha256sum --check
-          git apply --check /tmp/v111.patch
-          git apply /tmp/v111.patch
+          python3 .github/migrations/native_observer.py
+          python3 .github/migrations/native_hand.py
+          python3 .github/migrations/native_contracts.py
           git diff --check
-      - name: Verify new journal invariants
-        run: dotnet run --project tests/NativeJournal.Core.Tests.csproj --configuration Release
-      - name: Build and validate full mod
+      - name: Build and validate all behavior and native contracts
         run: bash build.sh
-      - name: Commit verified sources on the working branch only
+      - name: Commit verified source changes on isolated branch
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add BetterSpire2 tests
-          git commit -m 'feat: native journal lifecycle, exact damage attribution and bounded combat timeline'
+          git add BetterSpire2 tests Properties BetterSpire2Lite.csproj build.sh build.ps1 README.md
+          git rm -r .github/migrations
+          git commit -m 'feat: v111 isolated previews, native journal meter and guarded forecast updates'
           git push origin HEAD:refs/heads/fix/v111-native-journal-meter
           git rev-parse HEAD >> dist/BetterSpire2Lite/BUILD-SUCCESS.txt
+          git archive --format=zip --output=/tmp/BetterSpire-sources.zip HEAD BetterSpire2 tests BetterSpire2Lite.csproj build.sh build.ps1 build.cmd README.md global.json NuGet.Config Properties
       - uses: actions/upload-artifact@v4
         with:
-          name: BetterSpire-v111-native-journal
+          name: BetterSpire-v111-native-final
           path: dist/BetterSpire2Lite/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BetterSpire-native-sources
+          path: /tmp/BetterSpire-sources.zip
           if-no-files-found: error
