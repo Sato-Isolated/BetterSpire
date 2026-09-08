@@ -65,6 +65,3 @@ build.log
 __pycache__/
 *.pyc
 dist/
-
-# Local source bundle used to refresh the canonical v0.111 references above.
-/references/v111/
