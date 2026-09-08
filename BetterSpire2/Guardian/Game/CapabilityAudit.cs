@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using BetterSpire2.Guardian.Core;
+using BetterSpire2.Runtime.Native;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Modding;
@@ -64,6 +65,7 @@ internal static class CapabilityAudit
         foreach (var model in models)
         {
             var type = model.GetType();
+            if (type == typeof(BetterSpireCombatObserver)) continue;
             if (!IsBaseGame(type, out string owner))
             {
                 warn((ModText.IsFrench ? "Mod externe non certifié : " : "Uncertified external mod: ") +
@@ -76,7 +78,8 @@ internal static class CapabilityAudit
                     .Where(m => m.DeclaringType != typeof(AbstractModel) &&
                         m.GetBaseDefinition().DeclaringType == typeof(AbstractModel))
                     .Where(m => TrackedHooks.Contains(m.Name) || ForecastHookPolicy.IsReaction(m.Name))
-                    .Where(m => !IsSupported(type.Name, m.Name))
+                    .Where(m => !IsSupported(type.Name, m.Name) &&
+                        !ForecastHookPolicy.IsOutsideForecastWindow(type.Name, m.Name))
                     .Select(m => m.Name).Distinct().ToArray();
                 UnknownByType[type] = unknown;
             }
@@ -92,6 +95,7 @@ internal static class CapabilityAudit
         foreach (var model in models)
         {
             var type = model.GetType();
+            if (type == typeof(BetterSpireCombatObserver)) continue;
             if (!IsBaseGame(type, out _) ||
                 Overrides(type, "AfterDeath") || Overrides(type, "BeforeDeath") ||
                 Overrides(type, "ShouldDie") || Overrides(type, "ShouldDieLate")) return true;

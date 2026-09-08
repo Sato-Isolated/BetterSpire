@@ -80,6 +80,7 @@ internal static class GameApiCompatibilityTests
             VerifyNativeBoundaryCalls(mod);
             VerifyWinPatchTarget(game, mod);
             VerifyAdditionalContracts(game, mod, root);
+            VerifyNativeObserver(game, mod);
 
             Console.WriteLine($"PASS {_checks} v0.111 metadata compatibility checks.");
             return 0;
@@ -191,12 +192,73 @@ internal static class GameApiCompatibilityTests
                 "canonical references equal audited v111 snapshot");
     }
 
+    private static void VerifyNativeObserver(MetadataAssembly game, MetadataAssembly mod)
+    {
+        const string ns = "MegaCrit.Sts2.Core.";
+        const string helper = ns + "Modding.ModHelper";
+        const string observer = "BetterSpire2.Runtime.Native.BetterSpireCombatObserver";
+        const string bridge = "BetterSpire2.Runtime.Native.NativeCombatHooks";
+        const string model = ns + "Models.AbstractModel";
+        const string state = ns + "Combat.CombatState";
+        const string context = ns + "GameActions.Multiplayer.PlayerChoiceContext";
+        const string creature = ns + "Entities.Creatures.Creature";
+        const string result = ns + "Entities.Creatures.DamageResult";
+        const string card = ns + "Models.CardModel";
+        const string play = ns + "Entities.Cards.CardPlay";
+        const string attack = ns + "Commands.Builders.AttackCommand";
+        const string props = ns + "ValueProps.ValueProp";
+        const string side = ns + "Combat.CombatSide";
+        const string participants = "System.Collections.Generic.IReadOnlyList<" + creature + ">";
+        game.RequireContract(helper, "SubscribeForCombatStateHooks", "System.Void", MethodAttributes.Public, true,
+            "System.String", ns + "Modding.CombatHookSubscriptionDelegate");
+        game.RequireContract(ns + "Modding.CombatHookSubscriptionDelegate", "Invoke",
+            "System.Collections.Generic.IEnumerable<" + model + ">", MethodAttributes.Public, false, state);
+        var hooks = new (string Name, string[] Parameters)[]
+        {
+            ("BeforeAttack", [attack]), ("AfterAttack", [context, attack]),
+            ("BeforeCardPlayed", [play]), ("AfterCardPlayed", [context, play]),
+            ("AfterDamageGiven", [context, creature, result, props, creature, card]),
+            ("AfterDamageReceived", [context, creature, result, props, creature, card]),
+            ("AfterPowerAmountChanged", [context, ns + "Models.PowerModel", "System.Decimal", creature, card]),
+            ("AfterBlockGained", [creature, "System.Decimal", props, card]),
+            ("AfterCurrentHpChanged", [creature, "System.Decimal"]),
+            ("BeforeSideTurnStart", [context, side, participants, ns + "Combat.ICombatState"]),
+            ("AfterSideTurnStart", [side, participants, ns + "Combat.ICombatState"]),
+            ("AfterSideTurnEnd", [context, side, "System.Collections.Generic.IEnumerable<" + creature + ">"]),
+            ("AfterPlayerTurnStart", [context, ns + "Entities.Players.Player"])
+        };
+        foreach (var (name, parameters) in hooks)
+        {
+            game.RequireContract(model, name, "System.Threading.Tasks.Task", MethodAttributes.Public, false, parameters);
+            mod.RequireContract(observer, name, "System.Threading.Tasks.Task", MethodAttributes.Public, false, parameters);
+            Check(mod.Calls(observer, name, observer, "Changed", 0), "native observer routes " + name + " to flag-only callback");
+        }
+        mod.RequireNotificationOnlyOverrides(observer, hooks.Select(h => h.Name));
+        Check(mod.Calls(bridge, "Start", helper, "SubscribeForCombatStateHooks", 2), "one native combat provider");
+        Check(!mod.Calls(bridge, "Start", helper, "SubscribeForRunStateHooks", 2), "no duplicate run provider");
+        Check(mod.Calls(bridge, "Provide", ns + "Models.ModelDb", "GetById", 1), "observer uses canonical native model registry");
+        Check(mod.Calls(bridge, "Provide", model, "MutableClone", 0), "observer cloned per live combat");
+        Check(!mod.Calls(bridge, "Provide", ns + "Models.ModelDb", "Inject", 1), "no late ModelDb injection");
+        Check(mod.Calls(observer, "Changed", bridge, "Notify", 1), "hook callback only flags observer");
+        foreach (string method in new[] { "Start", "Provide", "Notify", "FlushPending" })
+            Check(!mod.Calls(bridge, method, ns + "Combat.CombatManager", "DebugOnlyGetState", 0), "no debug reads in " + method);
+        foreach (string caller in new[] { "Observe", "Dispose" })
+            Check(mod.Calls("BetterSpire2.Guardian.Game.ForecastEventObserver", caller, bridge,
+                caller == "Observe" ? "add_StateChanged" : "remove_StateChanged", 1), "forecast hooks " + caller);
+        Check(mod.Calls("BetterSpire2.Journal.Game.JournalService", "OnCombatSetUp", bridge, "add_StateChanged", 1), "journal attaches native observer");
+        Check(mod.Calls("BetterSpire2.Journal.Game.JournalService", "Detach", bridge, "remove_StateChanged", 1), "journal detaches native observer");
+        Check(!mod.Calls("BetterSpire2.Journal.Game.JournalService", "OnNativeStateChanged",
+            "BetterSpire2.Journal.Core.JournalSession", "Append", 1), "hooks never append duplicate statistics");
+        Check(mod.Calls("BetterSpire2.Runtime.ModRuntime", "Tick", bridge, "FlushPending", 0), "heartbeat flushes native notifications");
+        Check(mod.Calls("BetterSpire2.Runtime.CombatLifecycle", "ForgetCombat", bridge, "ForgetCombat", 0), "combat reset releases observer");
+    }
+
     private static void VerifyManifest(string root)
     {
         string path = Path.Combine(root, "bin", "Release", "net9.0", "BetterSpire2Lite.json");
         using JsonDocument json = JsonDocument.Parse(File.ReadAllText(path));
         var manifest = json.RootElement;
-        Equal("3.6.1-v111", manifest.GetProperty("version").GetString(), "manifest version");
+        Equal("3.6.2-v111", manifest.GetProperty("version").GetString(), "manifest version");
         Equal("0.111.0", manifest.GetProperty("min_game_version").GetString(), "minimum game version");
         Equal(false, manifest.GetProperty("affects_gameplay").GetBoolean(), "non-gameplay manifest flag");
     }
@@ -289,6 +351,31 @@ internal static class GameApiCompatibilityTests
                     ((method.Attributes & MethodAttributes.Static) != 0) == isStatic;
             });
             Check(found, "visibility/static/return/parameters: " + owner + "." + name);
+        }
+
+        internal void RequireNotificationOnlyOverrides(string owner, IEnumerable<string> hooks)
+        {
+            var expected = hooks.Concat(new[] { "get_ShouldReceiveCombatHooks", "AfterCloned" }).ToHashSet(StringComparer.Ordinal);
+            var definition = _metadata.GetTypeDefinition(FindType(owner) ?? throw new TypeLoadException(owner));
+            Check((definition.Attributes & TypeAttributes.Sealed) != 0, "observer is sealed; no subclass allowlist bypass");
+            foreach (var handle in definition.GetMethods())
+            {
+                var method = _metadata.GetMethodDefinition(handle);
+                if ((method.Attributes & MethodAttributes.Virtual) == 0) continue;
+                Check(expected.Remove(_metadata.GetString(method.Name)), "only audited notification/lifetime overrides");
+            }
+            Check(expected.Count == 0, "all audited observer overrides present");
+            // SavedProperty attributes would put observer state into serialization.
+            foreach (var property in definition.GetProperties())
+                foreach (var attr in _metadata.GetPropertyDefinition(property).GetCustomAttributes())
+                {
+                    var ctor = _metadata.GetCustomAttribute(attr).Constructor;
+                    if (ctor.Kind != HandleKind.MemberReference) continue;
+                    var parent = _metadata.GetMemberReference((MemberReferenceHandle)ctor).Parent;
+                    if (parent.Kind != HandleKind.TypeReference) continue;
+                    string attribute = _names.GetTypeFromReference(_metadata, (TypeReferenceHandle)parent, 0);
+                    Check(!attribute.EndsWith("SavedPropertyAttribute", StringComparison.Ordinal), "observer has no saved properties");
+                }
         }
 
         private TypeDefinitionHandle? FindType(string fullName)

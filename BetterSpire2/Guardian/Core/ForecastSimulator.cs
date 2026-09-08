@@ -123,11 +123,12 @@ public static class ForecastSimulator
         recipient.Prevented = Add(recipient.Prevented, prevented);
         steps.Add(new(recipient.Spec.Id, e.Source, e.Phase, e.Kind, damage, spent, 0,
             hpLost, healed, recipient.Hp, blockOwner.Block, prevented, buffers, revived));
+        int playerLost = 0;
         if (!ReferenceEquals(recipient, original))
         {
             // Apply the PLAYER's AfterOsty reductions only to the pet's overkill.
             decimal playerLoss = ModifyHp(original, overflow, out int playerBuffers);
-            ApplyHp(original, e, playerLoss, out int playerLost, out int playerHealed, out bool playerRevived);
+            ApplyHp(original, e, playerLoss, out playerLost, out int playerHealed, out bool playerRevived);
             int playerPrevented = Math.Max(0, overflow - ToInt(playerLoss));
             original.Buffers += playerBuffers;
             original.Prevented = Add(original.Prevented, playerPrevented);
@@ -136,16 +137,21 @@ public static class ForecastSimulator
                     0, 0, playerLost, playerHealed, original.Hp, original.Block,
                     playerPrevented, playerBuffers, playerRevived));
         }
-        // In the inspected DLL AfterDamageReceived receives the original target and
-        // the redirected result, NOT each entry in the damage-results collection.
-        // Keep this distinction for BeatingRemnant and Slippery when Osty intercepts.
-        if (original.Hp > 0)
-        {
-            original.DamageThisTurn += hpLost;
-            foreach (var rule in original.Rules)
-                if (rule.Spec.Kind == HpRuleKind.Slippery && rule.Charges > 0 && hpLost > 0)
-                    rule.Charges--;
-        }
+        // v111 CreatureCmd.Damage dispatches reactions over EACH DamageResult.Receiver,
+        // after resolving both Osty's loss and the original target's overflow.
+        // A dead receiver is skipped; one revived by a supported rule is alive again.
+        AfterDamageReceived(recipient, hpLost);
+        if (!ReferenceEquals(recipient, original)) AfterDamageReceived(original, playerLost);
+    }
+
+    private static void AfterDamageReceived(Actor receiver, int hpLost)
+    {
+        if (receiver.Hp <= 0) return;
+        receiver.DamageThisTurn += hpLost;
+        if (hpLost <= 0) return;
+        foreach (var rule in receiver.Rules)
+            if (rule.Spec.Kind == HpRuleKind.Slippery && rule.Charges > 0)
+                rule.Charges--;
     }
 
     private static decimal ModifyHp(Actor target, decimal amount, out int buffersUsed)

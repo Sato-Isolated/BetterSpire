@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using BetterSpire2.DamageMeter;
+using BetterSpire2.Runtime.Native;
 using BetterSpire2.Journal.Core;
 using BetterSpire2.Journal.UI;
 using Godot;
@@ -105,11 +106,18 @@ internal static class JournalService
             partial: state.RoundNumber > 1 || manager.IsStarting == false);
         Session.ObserveRound(state.RoundNumber);
         _history.Changed += OnHistoryChanged;
+        NativeCombatHooks.StateChanged += OnNativeStateChanged;
         _manager.TurnStarted += OnTurnStarted;
         _manager.CombatWon += OnWon;
         _manager.CombatEnded += OnEnded;
         Selection.Live(Session.Run); Window.Close();
         Drain(); Save(true);
+    }
+    private static void OnNativeStateChanged(CombatState state)
+    {
+        // Hooks only schedule a history read. Never append statistics here: the native
+        // history cursor remains the single accounting path, even when F6 is hidden.
+        if (ReferenceEquals(_state, state)) OnHistoryChanged();
     }
     private static void OnHistoryChanged() { if (IsCurrentObservation && !_sealed) _dirty = true; }
     private static void OnTurnStarted(CombatState state)
@@ -156,6 +164,7 @@ internal static class JournalService
     }
     private static void Detach()
     {
+        NativeCombatHooks.StateChanged -= OnNativeStateChanged;
         if (_history != null) _history.Changed -= OnHistoryChanged;
         if (_manager != null)
         { _manager.TurnStarted -= OnTurnStarted; _manager.CombatWon -= OnWon; _manager.CombatEnded -= OnEnded; }

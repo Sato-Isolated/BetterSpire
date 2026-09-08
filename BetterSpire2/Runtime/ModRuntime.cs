@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using BetterSpire2.Journal.Game;
+using BetterSpire2.Runtime.Native;
 using Godot;
 using MegaCrit.Sts2.Core.Nodes;
 using Timer = Godot.Timer;
@@ -18,6 +19,7 @@ internal static class ModRuntime
 
     internal static void EnsureStarted()
     {
+        NativeCombatHooks.Start();
         RunLifecycle.EnsureAttached();
         CombatLifecycle.EnsureAttached();
         var game = NGame.Instance;
@@ -38,6 +40,7 @@ internal static class ModRuntime
         try
         {
             ulong now = Time.GetTicksMsec();
+            TryTick("NativeHooks", NativeCombatHooks.FlushPending, now);
             TryTick("Guardian", () => DamageTracker.Tick(now), now);
             TryTick("HandViewer", TeammateHandViewer.FlushPendingChanges, now);
             TryTick("Settings", SettingsMenu.RefreshBindings, now);
@@ -61,6 +64,7 @@ internal static class ModRuntime
         LastErrors.Clear();
         NGame_Input_Patch.ResetOwnedKeys();
         Cleanup(ReleaseTimer);
+        Cleanup(NativeCombatHooks.Stop);
         Cleanup(CombatLifecycle.Stop);
         Cleanup(RunLifecycle.Stop);
         Cleanup(DamageTracker.Hide);
