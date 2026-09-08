@@ -18,28 +18,36 @@ jobs:
             8.0.x
       - name: Behavior suites and native metadata contracts
         run: bash build.sh
-      - name: Inspect native API implementations
+      - name: Inspect remaining native boundaries
         if: always()
         run: |
           dotnet tool install ilspycmd --tool-path /tmp/ilspy --version 9.1.0.7988 --add-source https://api.nuget.org/v3/index.json
           mkdir -p /tmp/native-v111
-          for type in MegaCrit.Sts2.Core.Models.CardModel MegaCrit.Sts2.Core.Localization.DynamicVars.DynamicVarSet MegaCrit.Sts2.Core.Combat.History.CombatHistoryEntry MegaCrit.Sts2.Core.Entities.Creatures.DamageResult MegaCrit.Sts2.Core.Models.Powers.DoomPower MegaCrit.Sts2.Core.Models.Powers.PoisonPower MegaCrit.Sts2.Core.Models.Relics.BeatingRemnant MegaCrit.Sts2.Core.MonsterMoves.Intents.AttackIntent MegaCrit.Sts2.Core.Combat.CombatStateTracker MegaCrit.Sts2.Core.Combat.CombatManager MegaCrit.Sts2.Core.Commands.CreatureCmd MegaCrit.Sts2.Core.Nodes.NRun MegaCrit.Sts2.Core.Models.Orbs.LightningOrb MegaCrit.Sts2.Core.Models.Orbs.FrostOrb; do
+          for type in MegaCrit.Sts2.Core.Models.AbstractModel MegaCrit.Sts2.Core.Models.CardModel MegaCrit.Sts2.Core.Entities.Creatures.Creature MegaCrit.Sts2.Core.Nodes.NRun MegaCrit.Sts2.Core.Runs.RunManager MegaCrit.Sts2.Core.Nodes.Cards.NCard MegaCrit.Sts2.Core.Combat.CombatManager MegaCrit.Sts2.Core.Models.OrbModel; do
             echo "===== $type ====="
-            /tmp/ilspy/ilspycmd -t "$type" references/v111/sts2.dll > "/tmp/native-v111/${type##*.}.cs" || continue
-            if [[ "$type" == *CardModel || "$type" == *CombatManager || "$type" == *CreatureCmd || "$type" == *NRun ]]; then
-              python3 - "$type" "/tmp/native-v111/${type##*.}.cs" <<'PY'
+            /tmp/ilspy/ilspycmd -t "$type" references/v111/sts2.dll > "/tmp/native-v111/${type##*.}.cs"
+            python3 - "$type" "/tmp/native-v111/${type##*.}.cs" <<'PY'
           import sys
           lines = open(sys.argv[2]).read().splitlines()
-          names = ('Clone', 'Preview', 'GetDescriptionForPile', 'CombatSetUp', 'CombatEnded', 'Reset(', 'EndCombatInternal', 'ExecuteEnemyTurn', 'DoTurnEnd', 'History.Clear', 'DamageReceived(', 'Doom', 'CombatStateChanged', 'RunState {')
+          names = {
+            'AbstractModel': ['ClonePreservingMutability(', 'MutableClone(', 'void AfterCloned', 'AbstractModel Clone'],
+            'CardModel': ['CardPile? Pile', 'CardPile Pile'],
+            'Creature': ['DamageResult LoseHpInternal(', 'void RemovePowerInternal('],
+            'NRun': [' State =>', ' State {', 'RunState ', 'IRunState '],
+            'RunManager': [' State =>', ' State {', 'RunState ', 'IRunState '],
+            'NCard': ['ClonePreservingMutability(', 'UpdateDynamicVarPreview('],
+            'CombatManager': ['Task EndPlayerTurnPhaseOne(', 'Task EndPlayerTurnPhaseTwo(', 'Task EndEnemyTurn('],
+            'OrbModel': ['Task TriggerPassive(', 'ModifyOrbPassiveTriggerCount(', 'decimal ModifyOrbValue('],
+          }[sys.argv[1].split('.')[-1]]
           selected = set()
           for i, line in enumerate(lines):
               if any(n in line for n in names):
-                  selected.update(range(max(0, i-3), min(len(lines), i+55)))
+                  if sys.argv[1].endswith('RunManager') or sys.argv[1].endswith('NRun'):
+                      selected.update(range(max(0, i-1), min(len(lines), i+5)))
+                  else:
+                      selected.update(range(max(0, i-2), min(len(lines), i+110)))
           for i in sorted(selected): print(f'{i+1}: {lines[i]}')
           PY
-            else
-              cat "/tmp/native-v111/${type##*.}.cs"
-            fi
           done
       - name: Upload mod build (not game references)
         if: success()
