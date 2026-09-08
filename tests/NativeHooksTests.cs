@@ -53,7 +53,7 @@ internal static class NativeHooksTests
             NativeCombatHooks.StateChanged += Count;
             for (int i = 0; i < 1000; i++) FireAll(observer);
             Check(calls == 0, "no UI/user callbacks from native hooks");
-            Check(!ModelDb.Canonical.Pending && ModelDb.Canonical.State == null, "canonical remains untouched");
+            Check(!ModelDb.Canonical!.Pending && ModelDb.Canonical.State == null, "canonical remains untouched");
             NativeCombatHooks.FlushPending();
             Check(calls == 1, "thirteen thousand notifications coalesced into one flush");
             NativeCombatHooks.FlushPending();
