@@ -86,8 +86,17 @@ internal sealed partial class GameForecastAdapter
                 {
                     case "Burn":
                     case "Decay":
+                    case "Infection":
+                    case "Toxic":
+                    case "Wither":
                         Damage(player.Creature, card.DynamicVars.Damage.BaseValue,
                             card.DynamicVars.Damage.Props, Source(card), handPhase, card: card);
+                        break;
+                    case "BadLuck":
+                    case "Beckon":
+                        Damage(player.Creature, card.DynamicVars.HpLoss.BaseValue,
+                            ValueProp.Move | ValueProp.Unpowered | ValueProp.Unblockable,
+                            Source(card), handPhase, card: card);
                         break;
                     case "Regret":
                         Damage(player.Creature, cards.Length,
@@ -97,6 +106,9 @@ internal sealed partial class GameForecastAdapter
                     case "Doubt":
                     case "Shame":
                         // Weak/Frail added here do not alter the already-triggered unpowered block.
+                        break;
+                    case "Debt":
+                        // Gold loss does not affect the survival forecast.
                         break;
                     default:
                         Warn(T("Unsimulated hand effect: ", "Effet de main non simulé : ") + Source(card));

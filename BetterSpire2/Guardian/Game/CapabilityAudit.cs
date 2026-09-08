@@ -36,7 +36,10 @@ internal static class CapabilityAudit
         ["BeforeSideTurnEndEarly"] = Set("PlatingPower"),
         ["BeforeSideTurnEnd"] = Set("Orichalcum", "FakeOrichalcum", "CloakClasp", "RippleBasin", "DiamondDiadem", "Regret"),
         ["AfterSideTurnEnd"] = Set("RegenPower", "ConstrictPower", "MagicBombPower", "DemisePower",
-            "WeakPower", "VulnerablePower", "FrailPower", "IntangiblePower", "DiamondDiademPower"),
+            "WeakPower", "VulnerablePower", "FrailPower", "IntangiblePower", "DiamondDiademPower",
+            // Its additive damage is already captured by Hook.ModifyDamage. Removal happens
+            // after the enemy turn, once every attack included in this forecast has resolved.
+            "TaintedPower"),
         ["AfterSideTurnEndLate"] = Set("DisintegrationPower"),
         ["BeforeSideTurnStart"] = Set("BeatingRemnant", "Orichalcum", "FakeOrichalcum"),
         ["AfterSideTurnStart"] = Set("PoisonPower"),
