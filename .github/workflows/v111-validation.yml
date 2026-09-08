@@ -21,20 +21,20 @@ jobs:
       - name: Inspect native API implementations
         if: always()
         run: |
-          dotnet tool install ilspycmd --tool-path /tmp/ilspy --version 9.1.0.7988
+          dotnet tool install ilspycmd --tool-path /tmp/ilspy --version 9.1.0.7988 --add-source https://api.nuget.org/v3/index.json
           mkdir -p /tmp/native-v111
-          for type in MegaCrit.Sts2.Core.Models.CardModel MegaCrit.Sts2.Core.Localization.DynamicVars.DynamicVarSet MegaCrit.Sts2.Core.Combat.History.CombatHistoryEntry MegaCrit.Sts2.Core.Entities.Creatures.DamageResult MegaCrit.Sts2.Core.Models.Powers.DoomPower MegaCrit.Sts2.Core.Models.Powers.PoisonPower MegaCrit.Sts2.Core.Models.Relics.BeatingRemnant MegaCrit.Sts2.Core.MonsterMoves.Intents.AttackIntent MegaCrit.Sts2.Core.Combat.CombatStateTracker MegaCrit.Sts2.Core.Combat.CombatManager MegaCrit.Sts2.Core.Commands.CreatureCmd; do
+          for type in MegaCrit.Sts2.Core.Models.CardModel MegaCrit.Sts2.Core.Localization.DynamicVars.DynamicVarSet MegaCrit.Sts2.Core.Combat.History.CombatHistoryEntry MegaCrit.Sts2.Core.Entities.Creatures.DamageResult MegaCrit.Sts2.Core.Models.Powers.DoomPower MegaCrit.Sts2.Core.Models.Powers.PoisonPower MegaCrit.Sts2.Core.Models.Relics.BeatingRemnant MegaCrit.Sts2.Core.MonsterMoves.Intents.AttackIntent MegaCrit.Sts2.Core.Combat.CombatStateTracker MegaCrit.Sts2.Core.Combat.CombatManager MegaCrit.Sts2.Core.Commands.CreatureCmd MegaCrit.Sts2.Core.Nodes.NRun MegaCrit.Sts2.Core.Models.Orbs.LightningOrb MegaCrit.Sts2.Core.Models.Orbs.FrostOrb; do
             echo "===== $type ====="
-            /tmp/ilspy/ilspycmd -t "$type" references/v111/sts2.dll > "/tmp/native-v111/${type##*.}.cs"
-            if [[ "$type" == *CardModel || "$type" == *CombatManager || "$type" == *CreatureCmd ]]; then
+            /tmp/ilspy/ilspycmd -t "$type" references/v111/sts2.dll > "/tmp/native-v111/${type##*.}.cs" || continue
+            if [[ "$type" == *CardModel || "$type" == *CombatManager || "$type" == *CreatureCmd || "$type" == *NRun ]]; then
               python3 - "$type" "/tmp/native-v111/${type##*.}.cs" <<'PY'
-          import re, sys
+          import sys
           lines = open(sys.argv[2]).read().splitlines()
-          names = ('Clone', 'Preview', 'GetDescriptionForPile', 'CombatSetUp', 'CombatEnded', 'Reset(', 'EndCombatInternal', 'ExecuteEnemyTurn', 'DoTurnEnd', 'History.Clear', 'DamageReceived(', 'Doom', 'CombatStateChanged')
+          names = ('Clone', 'Preview', 'GetDescriptionForPile', 'CombatSetUp', 'CombatEnded', 'Reset(', 'EndCombatInternal', 'ExecuteEnemyTurn', 'DoTurnEnd', 'History.Clear', 'DamageReceived(', 'Doom', 'CombatStateChanged', 'RunState {')
           selected = set()
           for i, line in enumerate(lines):
               if any(n in line for n in names):
-                  selected.update(range(max(0, i-3), min(len(lines), i+38)))
+                  selected.update(range(max(0, i-3), min(len(lines), i+55)))
           for i in sorted(selected): print(f'{i+1}: {lines[i]}')
           PY
             else
