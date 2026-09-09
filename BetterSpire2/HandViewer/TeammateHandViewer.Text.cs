@@ -12,8 +12,7 @@ public static partial class TeammateHandViewer
         try
         {
             string description = DetachedCardPreview.Description(card);
-            return CleanDescriptionText(description) + "\n\n" + (ModText.IsFrench
-                ? "Aperçu sans cible sélectionnée." : "Preview without a selected target.");
+            return CleanDescriptionText(description);
         }
         catch
         {
