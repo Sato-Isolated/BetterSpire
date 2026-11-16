@@ -29,7 +29,7 @@ public static class DamageTracker
     private static IReadOnlyDictionary<Creature, string>? _actorIds;
     private static CombatState? _state;
     private static bool _calculating, _renderPending = true, _statusRendered, _resolving;
-    private static ulong _lastErrorLog, _retryAfter;
+    private static ulong _retryAfter;
     public static bool DetailsVisible => Hud.DetailsVisible;
 
     // Called only for gameplay changes or explicit settings changes, never card-hover rendering.
@@ -140,8 +140,7 @@ public static class DamageTracker
                     T("No safety verdict. Check the mod log.", "Aucun verdict de sécurité. Consulte le journal."), Ledger, error: true);
             }
             catch { Hud.Hide(); }
-            if (_lastErrorLog == 0 || now - _lastErrorLog > 10000)
-            { _lastErrorLog = now; ModLog.Error("Guardian.Tick", exception); }
+            ModLog.ErrorThrottled("Guardian.Tick", exception);
         }
         finally { _calculating = false; }
     }

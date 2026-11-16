@@ -56,6 +56,28 @@ internal static class GameBoundaryTests
         patch.GetMethod("Prefix", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, null);
         Check(JournalController.Endings == endings + 1 && InstantSpeedHelper.Ends == speedEnds + 1,
             "early victory prefix drains journal and restores speed");
+        PhaseIsolation();
+    }
+
+    private static void PhaseIsolation()
+    {
+        // A failing overlay must not skip the journal/speed steps nor throw into native LoseCombat.
+        int endings = JournalController.Endings, losses = JournalController.Losses, speedEnds = InstantSpeedHelper.Ends;
+        int handHides = TeammateHandViewer.Hides, errors = BetterSpire2.Core.ModLog.Errors;
+        DamageTracker.ThrowOnHide = true;
+        try { CombatLifecycle.Ending(lost: true); }
+        finally { DamageTracker.ThrowOnHide = false; }
+        Check(TeammateHandViewer.Hides == handHides + 1 && JournalController.Endings == endings + 1 &&
+            JournalController.Losses == losses + 1 && InstantSpeedHelper.Ends == speedEnds + 1,
+            "ending runs every feature step after one fails");
+        Check(BetterSpire2.Core.ModLog.Errors == errors + 1, "the failed step is logged once");
+
+        int before = JournalController.ResetsBefore, stops = TeammateHandViewer.Stops, journalHides = JournalController.Hides;
+        CombatLifecycle.BeforeReset();
+        CombatLifecycle.AfterReset();
+        Check(JournalController.ResetsBefore == before + 1 && TeammateHandViewer.Stops == stops + 1 &&
+            JournalController.Hides == journalHides + 1 && CombatLifecycle.CurrentState == null,
+            "reset phases seal the journal, stop the hand viewer and forget the combat");
     }
 
     private static void Lifecycle()

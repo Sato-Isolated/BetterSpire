@@ -28,7 +28,7 @@ internal sealed partial class GuardianOverheadHud
     private readonly List<HudRect> _obstacles = new();
     private int _generation;
     private int _hiddenForSpace;
-    private ulong _lastErrorLog, _retryAfter;
+    private ulong _retryAfter;
     internal Action<int>? HiddenReadoutCountChanged { get; set; }
     internal int HiddenForSpace => _hiddenForSpace;
 
@@ -185,8 +185,7 @@ internal sealed partial class GuardianOverheadHud
             if (Valid(_root)) _root!.Visible = false;
             SetHiddenForSpace(0);
             _retryAfter = now + 1000;
-            if (_lastErrorLog == 0 || now - _lastErrorLog > 10000)
-            { _lastErrorLog = now; ModLog.Error("Guardian.Overhead", ex); }
+            ModLog.ErrorThrottled("Guardian.Overhead", ex);
         }
     }
 

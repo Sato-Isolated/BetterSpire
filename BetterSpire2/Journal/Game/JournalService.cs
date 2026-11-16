@@ -4,7 +4,6 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using BetterSpire2.DamageMeter;
 using BetterSpire2.Runtime.Native;
 using BetterSpire2.Journal.Core;
 using BetterSpire2.Journal.UI;
@@ -29,6 +28,9 @@ internal static class JournalService
     internal static readonly JournalSession Session = new();
     internal static readonly JournalSelection Selection = new();
     internal static readonly JournalWindow Window = new();
+    /// <summary>Screen context seen by the last successful tick; null after a failure or run cleanup.
+    /// Views such as the damage meter read it instead of the journal driving them.</summary>
+    internal static JournalFrame? LastFrame { get; private set; }
     private static readonly HistoryReader Reader = new();
     private static readonly JournalPlayerNames PlayerNames = new();
     private static JournalArchive? _archive;
@@ -48,7 +50,7 @@ internal static class JournalService
     private static bool _sealPending;
     private static CombatOutcome _pendingOutcome = CombatOutcome.Interrupted;
     private static long _savedRevision = -1;
-    private static ulong _lastSave, _lastError;
+    private static ulong _lastSave;
     internal static string StorageWarning { get; private set; } = "";
 
     private static void Boot()
@@ -172,7 +174,7 @@ internal static class JournalService
         var manager = RunManager.Instance;
         string status = manager?.IsAbandoned == true ? "abandoned" : manager?.IsGameOver == true
             ? (manager.History?.Win == true ? "won" : "lost") : "suspended";
-        Session.SetRunStatus(status); Save(true); PlayerNames.Reset(); _runState = null; DamageMeterController.Hide();
+        Session.SetRunStatus(status); Save(true); PlayerNames.Reset(); _runState = null; LastFrame = null;
     }
     private static void Detach()
     {
@@ -289,21 +291,19 @@ internal static class JournalService
             Selection.Sync(Session.Run);
             bool uiBlocking = NativeUiBlocking;
             Window.Render(Session, Selection, uiBlocking, StorageWarning);
-            DamageMeterController.Tick(Session,
+            LastFrame = new JournalFrame(
                 _runState != null && manager?.IsInProgress == true && !manager.IsCleaningUp,
                 _runState?.CurrentRoom is CombatRoom,
                 NMapScreen.Instance?.IsVisibleInTree() == true,
-                // HandViewer, clock and Guardian details are non-modal: never hide the meter for them.
+                // HandViewer, clock and Guardian details are non-modal: never hide views for them.
                 HudVisibilityPolicy.IsTransientBlocker(GameUiBlocking, Window.IsOpen));
             Save(false);
         }
         catch (Exception ex)
         {
-            DamageMeterController.Hide();
+            LastFrame = null;
             Session.MarkPartial();
-            ulong now = Time.GetTicksMsec();
-            if (_lastError == 0 || now - _lastError >= 10000)
-            { _lastError = now; ModLog.Error("Journal.Tick", ex); }
+            ModLog.ErrorThrottled("Journal.Tick", ex);
         }
         finally { _inTick = false; }
     }
@@ -354,7 +354,7 @@ internal static class JournalService
         if (NativeUiBlocking) return;
         Drain(); Window.Toggle(); Tick();
     }
-    internal static void Refresh() { Window.Invalidate(); DamageMeterController.Refresh(); ModRuntime.EnsureStarted(); }
+    internal static void Refresh() { Window.Invalidate(); ModRuntime.EnsureStarted(); }
     internal static void Export()
     {
         Boot(); Drain();
@@ -370,3 +370,6 @@ internal static class JournalService
     }
     private static string T(string en, string fr) => ModText.IsFrench ? fr : en;
 }
+
+/// <summary>Run and screen context of one journal tick, for views built on the journal.</summary>
+internal readonly record struct JournalFrame(bool ActiveRun, bool InCombatRoom, bool MapVisible, bool UiBlocking);

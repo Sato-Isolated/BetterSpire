@@ -35,70 +35,106 @@ internal static class CapabilityAudit
         "BeforeCardAutoPlayed", "AfterPlayerTurnStart", "BeforePlayerTurnStart",
         "AfterCreatureAdded", "BeforeCreatureRemoved", "AfterCreatureRemoved"
     };
+    // One line per native model: the hooks it overrides that are either simulated by the forecast
+    // builders or proven to have no HP/block effect between the local end turn and the enemy turn end.
+    // Anything a model overrides beyond its listed hooks keeps the forecast uncertain.
     private static readonly Dictionary<string, HashSet<string>> Supported = new(StringComparer.Ordinal)
     {
-        ["BeforeSideTurnEndVeryEarly"] = Set("Orichalcum", "FakeOrichalcum"),
-        ["BeforeSideTurnEndEarly"] = Set("PlatingPower", "RegenPower"),
-        // Storyteller only grants arrow-only Aim at end of turn.
-        ["BeforeSideTurnEnd"] = Set("Orichalcum", "FakeOrichalcum", "CloakClasp", "RippleBasin", "Regret", "DoomPower",
-            "ObsidianVice", "Storyteller"),
-        ["AfterSideTurnEnd"] = Set("ConstrictPower", "MagicBombPower", "DemisePower",
-            "WeakPower", "VulnerablePower", "FrailPower", "IntangiblePower",
-            "DoomPower",
-            // Its additive damage is already captured by Hook.ModifyDamage. Removal happens
-            // after the enemy turn, once every attack included in this forecast has resolved.
-            "TaintedPower",
-            // Fool (v0.113): self-removal, card cost or arrow-only Aim; no HP/block change.
-            "DislikeYouPower", "TunePower", "ShowOffPower", "QuietusPower", "KiVersePower",
-            "EncorePower", "RetainHandPower",
-            // v0.113: hand-draw debuff removal; Str/Dex loss after every end-turn block;
-            // temporary Thorns removed only when the enemy turn ends.
-            "AmnesiaPower", "LagavulinMatriarchDominionPower", "TemporaryThornsPower"),
-        ["AfterSideTurnEndLate"] = Set("DisintegrationPower", "InsatiableDominionPower"),
-        ["BeforeSideTurnStart"] = Set("BeatingRemnant", "Orichalcum", "FakeOrichalcum",
-            "YahPower", "LullabyPower", "ConductorsBaton", "TormentousCollar"),
-        // Powers below only act when their player-owner's own turn starts.
-        ["AfterSideTurnStart"] = Set("PoisonPower", "DiamondDiadem",
-            "ArcheryPower", "HiddenRootsPower", "ExerciseMat", "ConductorsBatonPower", "InsatiableDominionPower"),
-        ["AfterPlayerTurnStart"] = Set("HibernatePower", "EcstasyPower", "AmnesiaPower", "GodByrdPower", "YouAreMinePower"),
-        ["AfterPlayerTurnStartLate"] = Set("BathTowel"),
-        // v0.113 combat-entry and application-time effects, all before this forecast window.
-        ["BeforeCombatStart"] = Set("BathRobes", "Byrdine"),
-        ["AfterObtained"] = Set("Byrdine"),
-        ["BeforeApplied"] = Set("TemporaryThornsPower"),
-        ["AfterPowerAmountChanged"] = Set("TemporaryThornsPower"),
-        // Player powered attacks only (Strength gain); Thumbscrew adds hits to the owner's attack cards only.
-        ["AfterDamageGiven"] = Set("MightyWings"),
-        ["ModifyAttackHitCount"] = Set("Thumbscrew"),
-        ["BeforeDamageReceived"] = Set("ThornsPower"),
-        // Impaled reacts only to its applier's powered attacks; window player damage is all Unpowered.
-        ["AfterDamageReceived"] = Set("BeatingRemnant", "SlipperyPower", "FlameBarrierPower", "ImpaledPower"),
-        // Fool (v0.113). Arrows are shot/impaled only from card OnPlay; draw, shuffle, card play
-        // and card generation by the player happen outside the end-turn..enemy-turn window.
-        // Twine (block on dislodge), SimpletonPower (auto-play) and VigorPower (enemy-owned
-        // first-hit bonus) stay uncertain. AfterDeath support does not bypass HasUnresolvedDeathReaction.
-        ["BeforeAttack"] = Set("AimPower", "QuietusPower"),
-        ["AfterAttack"] = Set("AimPower", "QuietusPower"),
-        ["AfterDeath"] = Set("ImpaledPower", "ShowOffPower", "CompostPower"),
-        ["AfterApplied"] = Set("ImpaledPower", "EncorePower", "LullabyPower", "InsatiableDominionPower"),
-        ["AfterRoomEntered"] = Set("SongBow", "BathRobes", "Storyteller"),
-        ["BeforeHandDraw"] = Set("BizarreLamp", "Ocarina", "Bounce", "MythicFormPower", "EnnuiPower",
-            "AeonglassDominionPower"),
-        ["AfterCardPlayed"] = Set("StretchPower", "ViolentChordPower", "SongPathPower", "MotifPower",
-            "LullabyPower", "LostLutePower", "EnsemblePower", "EncorePower", "ConductorsBaton"),
-        ["BeforeCardPlayed"] = Set("StretchPower", "EncorePower", "FreeCardPower"),
-        ["AfterModifyingCardPlayCount"] = Set("KiVersePower"),
-        ["AfterCardGeneratedForCombat"] = Set("AllIsWellPower", "Fertilizer"),
-        ["AfterShuffle"] = Set("WhittlingKnife"),
-        ["AfterArrowShot"] = Set("WhistlingArrows", "CoveringFirePower", "QuietusPower"),
-        ["AfterArrowImpaled"] = Set("ExplosiveArrowsPower"),
-        ["AfterArrowDislodged"] = Set("YahPower", "EpicRetrieval"),
-        ["AfterCurrentHpChanged"] = Set("Wuppy"),
-        ["ShouldDieLate"] = Set("LizardTail"),
-        ["ModifyPreBlockDamageTarget"] = Set("WuppysLoyaltyPower"),
-        ["ModifyUnblockedDamageTarget"] = Set("DieForYouPower"),
-        ["ModifyHpLostAfterOsty"] = Set("BeatingRemnant", "TungstenRod", "IntangiblePower", "SlipperyPower"),
-        ["ModifyHpLostAfterOstyLate"] = Set("BufferPower")
+        // Simulated: end-turn block, healing, hand and relic effects.
+        ["Orichalcum"] = Set("BeforeSideTurnEndVeryEarly", "BeforeSideTurnEnd", "BeforeSideTurnStart"),
+        ["FakeOrichalcum"] = Set("BeforeSideTurnEndVeryEarly", "BeforeSideTurnEnd", "BeforeSideTurnStart"),
+        ["PlatingPower"] = Set("BeforeSideTurnEndEarly"),
+        ["RegenPower"] = Set("BeforeSideTurnEndEarly"),
+        ["CloakClasp"] = Set("BeforeSideTurnEnd"),
+        ["RippleBasin"] = Set("BeforeSideTurnEnd"),
+        ["Regret"] = Set("BeforeSideTurnEnd"),
+        ["ObsidianVice"] = Set("BeforeSideTurnEnd"), // v0.113 random-target hit, x hand size
+        // Simulated: damage over time, Doom and late self-damage.
+        ["PoisonPower"] = Set("AfterSideTurnStart"),
+        ["DoomPower"] = Set("BeforeSideTurnEnd", "AfterSideTurnEnd"),
+        ["DisintegrationPower"] = Set("AfterSideTurnEndLate"),
+        ["InsatiableDominionPower"] = Set("AfterSideTurnEndLate", "AfterSideTurnStart", "AfterApplied"), // v0.113 Dread
+        // Simulated: retaliation, redirection, revival and HP-loss rules.
+        ["ThornsPower"] = Set("BeforeDamageReceived"),
+        ["FlameBarrierPower"] = Set("AfterDamageReceived"),
+        ["DieForYouPower"] = Set("ModifyUnblockedDamageTarget"),
+        ["WuppysLoyaltyPower"] = Set("ModifyPreBlockDamageTarget"),
+        ["Wuppy"] = Set("AfterCurrentHpChanged"),
+        ["LizardTail"] = Set("ShouldDieLate"),
+        ["BufferPower"] = Set("ModifyHpLostAfterOstyLate"),
+        ["TungstenRod"] = Set("ModifyHpLostAfterOsty"),
+        ["BeatingRemnant"] = Set("ModifyHpLostAfterOsty", "AfterDamageReceived", "BeforeSideTurnStart"),
+        ["SlipperyPower"] = Set("ModifyHpLostAfterOsty", "AfterDamageReceived"),
+        ["IntangiblePower"] = Set("ModifyHpLostAfterOsty", "AfterSideTurnEnd"),
+        ["HibernatePower"] = Set("AfterPlayerTurnStart"), // Frost passives already copy block to teammates
+        ["DiamondDiadem"] = Set("AfterSideTurnStart"),
+
+        // Expire or trigger only once the enemy turn has ended; their modifiers are read natively.
+        ["WeakPower"] = Set("AfterSideTurnEnd"),
+        ["VulnerablePower"] = Set("AfterSideTurnEnd"),
+        ["FrailPower"] = Set("AfterSideTurnEnd"),
+        ["TaintedPower"] = Set("AfterSideTurnEnd"),
+        ["ConstrictPower"] = Set("AfterSideTurnEnd"),
+        ["MagicBombPower"] = Set("AfterSideTurnEnd"),
+        ["DemisePower"] = Set("AfterSideTurnEnd"),
+        ["TemporaryThornsPower"] = Set("AfterSideTurnEnd", "BeforeApplied", "AfterPowerAmountChanged"),
+
+        // Fool (v0.113). Arrows are shot/impaled only from card OnPlay (pinned by an IL contract);
+        // Impaled reacts only to its applier's powered attacks, and window player damage is Unpowered.
+        // Twine (block on dislodge), SimpletonPower (auto-play) and VigorPower (enemy-owned first-hit
+        // bonus) stay uncertain. AfterDeath support does not bypass HasUnresolvedDeathReaction.
+        ["ImpaledPower"] = Set("AfterApplied", "AfterDamageReceived", "AfterDeath"),
+        ["AimPower"] = Set("BeforeAttack", "AfterAttack"),
+        ["QuietusPower"] = Set("BeforeAttack", "AfterAttack", "AfterArrowShot", "AfterSideTurnEnd"),
+        ["WhistlingArrows"] = Set("AfterArrowShot"),
+        ["CoveringFirePower"] = Set("AfterArrowShot"),
+        ["ExplosiveArrowsPower"] = Set("AfterArrowImpaled"),
+        ["YahPower"] = Set("AfterArrowDislodged", "BeforeSideTurnStart"),
+        ["EpicRetrieval"] = Set("AfterArrowDislodged"),
+        ["SongBow"] = Set("AfterRoomEntered"),
+        ["DislikeYouPower"] = Set("AfterSideTurnEnd"), // arrow-only damage bonus, removed at player turn end
+        ["TunePower"] = Set("AfterSideTurnEnd"), // grants free card plays only
+        ["ShowOffPower"] = Set("AfterSideTurnEnd", "AfterDeath"), // arrow-only Aim
+        ["KiVersePower"] = Set("AfterSideTurnEnd", "AfterModifyingCardPlayCount"),
+        ["EncorePower"] = Set("AfterSideTurnEnd", "AfterApplied", "AfterCardPlayed", "BeforeCardPlayed"),
+        ["RetainHandPower"] = Set("AfterSideTurnEnd"),
+        ["CompostPower"] = Set("AfterDeath"), // energy only
+        ["LullabyPower"] = Set("AfterApplied", "AfterCardPlayed", "BeforeSideTurnStart"),
+        ["ConductorsBaton"] = Set("AfterCardPlayed", "BeforeSideTurnStart"),
+        ["ConductorsBatonPower"] = Set("AfterSideTurnStart"),
+        ["ArcheryPower"] = Set("AfterSideTurnStart"),
+        ["HiddenRootsPower"] = Set("AfterSideTurnStart"),
+        ["ExerciseMat"] = Set("AfterSideTurnStart"),
+        ["EcstasyPower"] = Set("AfterPlayerTurnStart"),
+        ["StretchPower"] = Set("AfterCardPlayed", "BeforeCardPlayed"),
+        ["FreeCardPower"] = Set("BeforeCardPlayed"),
+        ["ViolentChordPower"] = Set("AfterCardPlayed"),
+        ["SongPathPower"] = Set("AfterCardPlayed"),
+        ["MotifPower"] = Set("AfterCardPlayed"),
+        ["LostLutePower"] = Set("AfterCardPlayed"),
+        ["EnsemblePower"] = Set("AfterCardPlayed"),
+        ["BizarreLamp"] = Set("BeforeHandDraw"),
+        ["Ocarina"] = Set("BeforeHandDraw"),
+        ["Bounce"] = Set("BeforeHandDraw"),
+        ["MythicFormPower"] = Set("BeforeHandDraw"),
+        ["EnnuiPower"] = Set("BeforeHandDraw"),
+        ["AllIsWellPower"] = Set("AfterCardGeneratedForCombat"), // only player-created Sadness
+        ["Fertilizer"] = Set("AfterCardGeneratedForCombat"),
+        ["WhittlingKnife"] = Set("AfterShuffle"),
+
+        // Other v0.113 content: combat entry, player-turn start, card or draw time, or no HP/block effect.
+        ["Storyteller"] = Set("AfterRoomEntered", "BeforeSideTurnEnd"), // arrow-only Aim
+        ["BathRobes"] = Set("AfterRoomEntered", "BeforeCombatStart"),
+        ["Byrdine"] = Set("BeforeCombatStart", "AfterObtained"),
+        ["BathTowel"] = Set("AfterPlayerTurnStartLate"),
+        ["TormentousCollar"] = Set("BeforeSideTurnStart"),
+        ["AeonglassDominionPower"] = Set("BeforeHandDraw"),
+        ["AmnesiaPower"] = Set("AfterPlayerTurnStart", "AfterSideTurnEnd"),
+        ["GodByrdPower"] = Set("AfterPlayerTurnStart"),
+        ["YouAreMinePower"] = Set("AfterPlayerTurnStart"),
+        ["LagavulinMatriarchDominionPower"] = Set("AfterSideTurnEnd"), // Str/Dex loss after end-turn block
+        ["MightyWings"] = Set("AfterDamageGiven"), // Strength from player powered attacks
+        ["Thumbscrew"] = Set("ModifyAttackHitCount") // owner's attack cards only
     };
     private static readonly HashSet<string> SafeAfterModification = Set(
         "TungstenRod", "BeatingRemnant", "IntangiblePower", "HardToKillPower", "BufferPower");
@@ -159,7 +195,7 @@ internal static class CapabilityAudit
         return result;
     }
     private static bool IsSupported(string type, string hook) =>
-        Supported.TryGetValue(hook, out var types) && types.Contains(type) ||
+        Supported.TryGetValue(type, out var hooks) && hooks.Contains(hook) ||
         hook.StartsWith("AfterModifying", StringComparison.Ordinal) && SafeAfterModification.Contains(type);
 
     private static bool IsBaseGame(Type type, out string owner)

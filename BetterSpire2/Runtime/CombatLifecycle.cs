@@ -33,15 +33,40 @@ internal static class CombatLifecycle
             OnSetUp(state);
     }
 
+    // The only place that tells features about combat boundaries. Patches call a phase, never a feature;
+    // each feature step is isolated so one failure cannot skip the others or reach native game code.
+
     private static void OnSetUp(CombatState state)
     {
         _state = state;
         _combatId = _manager?.CurrentCombatId;
-        Safe("InstantSpeed", InstantSpeedHelper.OnCombatStart);
-        Safe("Guardian", DamageTracker.OnCombatSetUp);
-        Safe("Journal", JournalController.OnCombatSetUp);
-        Safe("HandViewer", TeammateHandViewer.OnCombatSetUp);
-        Safe("Clock", ClockDisplay.SyncVisibility);
+        Guard("InstantSpeed", InstantSpeedHelper.OnCombatStart);
+        Guard("Guardian", DamageTracker.OnCombatSetUp);
+        Guard("Journal", JournalController.OnCombatSetUp);
+        Guard("HandViewer", TeammateHandViewer.OnCombatSetUp);
+        Guard("Clock", ClockDisplay.SyncVisibility);
+    }
+
+    /// <summary>Victory or defeat has been decided; runs before native teardown so overlays hide at once.</summary>
+    internal static void Ending(bool lost)
+    {
+        Guard("Guardian.Ending", DamageTracker.Hide);
+        Guard("HandViewer.Ending", TeammateHandViewer.Hide);
+        Guard("Journal.Ending", () => JournalController.OnCombatEnding(lost));
+        Guard("InstantSpeed.Ending", InstantSpeedHelper.OnCombatEnd);
+    }
+
+    /// <summary>Before CombatManager.Reset clears native state the journal still needs to read.</summary>
+    internal static void BeforeReset() => Guard("Journal.BeforeReset", JournalController.BeforeCombatReset);
+
+    /// <summary>After CombatManager.Reset: nothing of the old combat may survive.</summary>
+    internal static void AfterReset()
+    {
+        Guard("Forget", ForgetCombat);
+        Guard("Guardian.Reset", DamageTracker.Hide);
+        Guard("HandViewer.Reset", TeammateHandViewer.Stop); // stops, not just hides: the combat objects are gone
+        Guard("Journal.Reset", JournalController.Hide);
+        Guard("InstantSpeed.Reset", InstantSpeedHelper.OnCombatEnd);
     }
 
     private static void OnBegan(CombatState state)
@@ -55,9 +80,10 @@ internal static class CombatLifecycle
         // Never let a delayed old-combat event tear down a newly running combat.
         if (_manager == null || _manager.IsStarting || _manager.IsInProgress ||
             !ReferenceEquals(_state?.RunState.CurrentRoom, room)) return;
-        Safe("Guardian.End", DamageTracker.Hide);
-        Safe("HandViewer.End", TeammateHandViewer.Hide);
-        Safe("InstantSpeed.End", InstantSpeedHelper.OnCombatEnd);
+        // The journal was already sealed by Ending(); this native event only confirms the teardown.
+        Guard("Guardian.End", DamageTracker.Hide);
+        Guard("HandViewer.End", TeammateHandViewer.Hide);
+        Guard("InstantSpeed.End", InstantSpeedHelper.OnCombatEnd);
         ForgetCombat();
     }
 
@@ -79,9 +105,5 @@ internal static class CombatLifecycle
         ForgetCombat();
     }
 
-    private static void Safe(string module, Action action)
-    {
-        try { action(); }
-        catch (Exception ex) { ModLog.Error("CombatLifecycle." + module, ex); }
-    }
+    private static void Guard(string module, Action action) => ModLog.Guard("CombatLifecycle." + module, action);
 }

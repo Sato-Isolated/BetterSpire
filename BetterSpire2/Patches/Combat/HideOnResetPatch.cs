@@ -1,5 +1,5 @@
+using BetterSpire2.Runtime;
 using HarmonyLib;
-using System;
 using MegaCrit.Sts2.Core.Combat;
 
 namespace BetterSpire2.Patches.Combat;
@@ -10,23 +10,8 @@ namespace BetterSpire2.Patches.Combat;
 [HarmonyPatch(typeof(CombatManager), nameof(CombatManager.Reset))]
 internal static class CombatManager_Reset_Patch
 {
-
-
     [HarmonyPrefix]
-    private static void Prefix() => JournalController.BeforeCombatReset();
-
+    private static void Prefix() => CombatLifecycle.BeforeReset();
     [HarmonyPostfix]
-    private static void Postfix()
-    {
-        Safe(CombatLifecycle.ForgetCombat);
-        Safe(DamageTracker.Hide);
-        Safe(TeammateHandViewer.Stop);
-        Safe(JournalController.Hide);
-        Safe(InstantSpeedHelper.OnCombatEnd);
-    }
-    private static void Safe(Action action)
-    {
-        try { action(); }
-        catch (Exception ex) { ModLog.Error("CombatReset", ex); }
-    }
+    private static void Postfix() => CombatLifecycle.AfterReset();
 }

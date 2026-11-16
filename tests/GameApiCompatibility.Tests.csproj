@@ -9,5 +9,6 @@
   <ItemGroup>
     <Compile Include="GameApiCompatibilityTests.cs" />
     <Compile Include="GamePatchTargetContracts.cs" />
+    <Compile Include="Support/MetadataAssembly.cs" />
   </ItemGroup>
 </Project>

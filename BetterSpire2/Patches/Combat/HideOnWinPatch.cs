@@ -1,3 +1,4 @@
+using BetterSpire2.Runtime;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
 using System;
@@ -21,16 +22,5 @@ internal static class CombatManager_EndCombatInternal_Patch
             ?? throw new MissingMethodException("CombatManager.EndCombatInternal(CombatTurnState)");
     }
     [HarmonyPrefix]
-    private static void Prefix()
-    {
-        Safe(DamageTracker.Hide);
-        Safe(TeammateHandViewer.Hide);
-        Safe(() => JournalController.OnCombatEnding(false));
-        Safe(InstantSpeedHelper.OnCombatEnd);
-    }
-    private static void Safe(Action action)
-    {
-        try { action(); }
-        catch (Exception ex) { ModLog.Error("CombatEnding", ex); }
-    }
+    private static void Prefix() => CombatLifecycle.Ending(lost: false);
 }

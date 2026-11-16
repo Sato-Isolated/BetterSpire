@@ -21,8 +21,7 @@ internal static class JournalController
     public static void RecordEnergyGained(Creature creature, int amount) => Safe(() => JournalService.Record(creature, Stat.EnergyGained, amount));
     public static void RecordBlockLost(Creature creature, int amount) => Safe(() => JournalService.Record(creature, Stat.BlockRemoved, amount));
     public static void RecordBlockCleared(Creature creature, int amount) => Safe(() => JournalService.Record(creature, Stat.BlockExpired, amount));
-    private static void Safe(Action action)
-    { try { action(); } catch (Exception ex) { ModLog.Error("Journal.Command", ex); } }
+    private static void Safe(Action action) => ModLog.Guard("Journal.Command", action);
     internal static bool IsPointInWindow(Godot.Vector2 point) => JournalService.Window.Contains(point);
 
 }

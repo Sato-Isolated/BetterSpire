@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="DamageSourceNativeTests.cs" />
+    <Compile Include="Support/MetadataAssembly.cs" />
     <Compile Include="../BetterSpire2/Journal/Core/OneShotDamageScope.cs" Link="Journal/OneShotDamageScope.cs" />
   </ItemGroup>
 </Project>

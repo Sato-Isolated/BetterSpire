@@ -2,7 +2,7 @@
 using System;
 using BetterSpire2.DamageMeter.UI;
 using BetterSpire2.DamageMeter.Core;
-using BetterSpire2.Journal.Core;
+using BetterSpire2.Journal.Game;
 using Godot;
 
 namespace BetterSpire2.DamageMeter;
@@ -10,22 +10,21 @@ namespace BetterSpire2.DamageMeter;
 internal static class DamageMeterController
 {
     private static readonly DamageMeterHud Hud = new();
-    private static ulong _lastError;
-    internal static void Tick(JournalSession session, bool activeRun, bool inCombatRoom, bool mapVisible, bool uiBlocking)
+    /// <summary>Runs after JournalService.Tick; a missing frame means the journal failed or the run ended.</summary>
+    internal static void Tick()
     {
         try
         {
-            var scope = DamageMeterContext.Select(mapVisible, inCombatRoom, ModSettings.DamageMeterCurrentRound);
-            Hud.Render(session, scope, HudVisibilityPolicy.ShowMeter(ModSettings.ShowDamageMeter,
-                activeRun, ModSettings.DamageMeterOnlyCombat, scope != DamageMeterScope.Run, uiBlocking));
+            if (JournalService.LastFrame is not { } frame) { Hud.Hide(); return; }
+            var scope = DamageMeterContext.Select(frame.MapVisible, frame.InCombatRoom, ModSettings.DamageMeterCurrentRound);
+            Hud.Render(JournalService.Session, scope, HudVisibilityPolicy.ShowMeter(ModSettings.ShowDamageMeter,
+                frame.ActiveRun, ModSettings.DamageMeterOnlyCombat, scope != DamageMeterScope.Run, frame.UiBlocking));
         }
         catch (Exception ex)
         {
             Hud.Hide(); // Never leave a stale or partially updated ranking visible.
             Hud.Invalidate();
-            ulong now = Time.GetTicksMsec();
-            if (_lastError == 0 || now - _lastError >= 10000)
-            { _lastError = now; ModLog.Error("DamageMeter.Render", ex); }
+            ModLog.ErrorThrottled("DamageMeter.Render", ex);
         }
     }
     internal static void Toggle()

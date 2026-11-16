@@ -27,7 +27,7 @@ public static partial class TeammateHandViewer
         private readonly HashSet<CardModel> _subscribedCards = new();
         private int _viewGeneration;
         private bool _cardsDirty = true, _potionsDirty = true, _statsDirty = true, _disposed;
-        private ulong _lastError, _retryAfter, _nextSafetyRefresh;
+        private ulong _retryAfter, _nextSafetyRefresh;
         private string _displayName = "";
         private (int Hp, int Max, int Block, int Energy, int Stars, int Count, bool Available,
             int Arrows, int Away, int Destroyed, int Slots)? _lastStats;
@@ -140,12 +140,7 @@ public static partial class TeammateHandViewer
                 _retryAfter = now + 1000;
             }
         }
-        private void LogError(Exception ex)
-        {
-            ulong now = Time.GetTicksMsec();
-            if (_lastError != 0 && now - _lastError < 10000) return;
-            _lastError = now; ModLog.Error("HandViewer.Refresh", ex);
-        }
+        private static void LogError(Exception ex) => ModLog.ErrorThrottled("HandViewer.Refresh", ex);
         private void OnHandChanged() => _cardsDirty = _statsDirty = true;
         private void OnCardAddedOrRemoved(CardModel _) => OnHandChanged();
         private void OnPotionChanged(PotionModel _) => _potionsDirty = true;

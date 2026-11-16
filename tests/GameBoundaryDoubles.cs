@@ -142,7 +142,15 @@ namespace MegaCrit.Sts2.Core.Models
         public void Forge() => Forged?.Invoke();
     }
 }
-namespace BetterSpire2.Core { internal static class ModLog { internal static int Errors; internal static void Error(string _, Exception ex) => Errors++; } }
+namespace BetterSpire2.Core
+{
+    internal static class ModLog
+    {
+        internal static int Errors;
+        internal static void Error(string _, Exception ex) => Errors++;
+        internal static void Guard(string context, Action action) { try { action(); } catch (Exception ex) { Error(context, ex); } }
+    }
+}
 namespace BetterSpire2.Infrastructure
 {
     internal static class InstantSpeedHelper
@@ -158,22 +166,31 @@ namespace BetterSpire2.Trackers
     internal static class DamageTracker
     {
         internal static int Setups, Hides;
+        internal static bool ThrowOnHide;
         internal static void OnCombatSetUp() { Setups++; Runtime.CombatLifecycle.EnsureAttached(); }
-        internal static void Hide() => Hides++;
+        internal static void Hide() { Hides++; if (ThrowOnHide) throw new Exception("test hide failure"); }
     }
 }
 namespace BetterSpire2.HandViewer
 {
-    internal static class TeammateHandViewer { internal static void OnCombatSetUp() { } internal static void Hide() { } }
+    internal static class TeammateHandViewer
+    {
+        internal static int Hides, Stops;
+        internal static void OnCombatSetUp() { }
+        internal static void Hide() => Hides++;
+        internal static void Stop() => Stops++;
+    }
 }
 namespace BetterSpire2.UI { internal static class ClockDisplay { internal static void SyncVisibility() { } } }
 namespace BetterSpire2.Journal.Game
 {
     internal static class JournalController
     {
-        internal static int Setups, Endings;
+        internal static int Setups, Endings, Losses, ResetsBefore, Hides;
         internal static void OnCombatSetUp() => Setups++;
-        internal static void OnCombatEnding(bool lost) => Endings++;
+        internal static void OnCombatEnding(bool lost) { Endings++; if (lost) Losses++; }
+        internal static void BeforeCombatReset() => ResetsBefore++;
+        internal static void Hide() => Hides++;
     }
 }
 namespace HarmonyLib

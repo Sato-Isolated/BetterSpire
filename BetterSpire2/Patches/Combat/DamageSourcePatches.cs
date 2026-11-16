@@ -44,7 +44,7 @@ internal static class DamageSourceNativeMethods
     internal static MethodInfo? ViolentChordMoveNext() => PoisonNativeMethods.MoveNext(
         AccessTools.DeclaredMethod(typeof(ViolentChordPower), nameof(ViolentChordPower.AfterCardPlayed), new[] {
             typeof(PlayerChoiceContext), typeof(CardPlay) }));
-    internal static MethodInfo? LightningDamage() => AccessTools.Method(typeof(CreatureCmd), nameof(CreatureCmd.Damage), ContextTargetsDamage);
+    internal static MethodInfo? TargetsDamage() => AccessTools.Method(typeof(CreatureCmd), nameof(CreatureCmd.Damage), ContextTargetsDamage);
     internal static MethodInfo? SingleDamage() => AccessTools.Method(typeof(CreatureCmd), nameof(CreatureCmd.Damage), ContextCreatureDamage);
     internal static MethodInfo? SingleDamageWithCard() => AccessTools.Method(typeof(CreatureCmd), nameof(CreatureCmd.Damage), ContextCreatureDamageWithCard);
 }
@@ -96,152 +96,102 @@ internal static class DamageSourceTranspiler
     }
 }
 
+/// <summary>
+/// One source attribution: inside an async native hook, swap its single CreatureCmd.Damage call for the
+/// DamageSourceObserver wrapper that credits the real source. Any shape mismatch keeps the native call and
+/// marks the capability partial.
+/// </summary>
+internal sealed class DamageSourceOrigin(string capability, Func<MethodInfo?> target, Func<MethodInfo?> native,
+    string wrapper, params (Type FieldType, string? FieldName)[] capturedFields)
+{
+    internal bool Prepare()
+    {
+        bool found = target() != null && native() != null;
+        DamageObservationCoverage.Require(capability, found);
+        return found;
+    }
+
+    internal MethodBase Target() => target()!;
+
+    internal IEnumerable<CodeInstruction> Transpile(IEnumerable<CodeInstruction> instructions, MethodBase original)
+    {
+        var replacement = AccessTools.Method(typeof(DamageSourceObserver), wrapper)!;
+        var result = DamageSourceTranspiler.Replace(instructions, original, native()!, replacement, capability,
+            capturedFields).ToList();
+        DamageObservationCoverage.Require(capability, result.Any(instruction => instruction.Calls(replacement)));
+        return result;
+    }
+}
+
+// Harmony needs one class per target; each declares only its source.
 [HarmonyPatch]
 internal static class Journal_LightningOrbDamageOrigin_Patch
 {
-    private const string Capability = "damage-source:lightning";
-    [HarmonyPrepare]
-    private static bool Prepare()
-    {
-        bool found = DamageSourceNativeMethods.LightningMoveNext() != null && DamageSourceNativeMethods.LightningDamage() != null;
-        DamageObservationCoverage.Require(Capability, found); return found;
-    }
-    [HarmonyTargetMethod]
-    private static MethodBase TargetMethod() => DamageSourceNativeMethods.LightningMoveNext()!;
-    [HarmonyTranspiler]
-    private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, MethodBase __originalMethod)
-    {
-        var native = DamageSourceNativeMethods.LightningDamage()!;
-        var replacement = AccessTools.Method(typeof(DamageSourceObserver), nameof(DamageSourceObserver.LightningDamage))!;
-        var result = DamageSourceTranspiler.Replace(instructions, __originalMethod, native, replacement, Capability,
-            (typeof(LightningOrb), null), (typeof(bool), null)).ToList();
-        bool valid = result.Any(instruction => instruction.Calls(replacement));
-        DamageObservationCoverage.Require(Capability, valid);
-        return result;
-    }
+    private static readonly DamageSourceOrigin Origin = new("damage-source:lightning",
+        DamageSourceNativeMethods.LightningMoveNext, DamageSourceNativeMethods.TargetsDamage,
+        nameof(DamageSourceObserver.LightningDamage), (typeof(LightningOrb), null), (typeof(bool), null));
+    [HarmonyPrepare] private static bool Prepare() => Origin.Prepare();
+    [HarmonyTargetMethod] private static MethodBase TargetMethod() => Origin.Target();
+    [HarmonyTranspiler] private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions,
+        MethodBase __originalMethod) => Origin.Transpile(instructions, __originalMethod);
 }
 
 [HarmonyPatch]
 internal static class Journal_DarkOrbDamageOrigin_Patch
 {
-    private const string Capability = "damage-source:dark-orb";
-    [HarmonyPrepare]
-    private static bool Prepare()
-    {
-        bool found = DamageSourceNativeMethods.DarkOrbMoveNext() != null && DamageSourceNativeMethods.SingleDamage() != null;
-        DamageObservationCoverage.Require(Capability, found); return found;
-    }
-    [HarmonyTargetMethod]
-    private static MethodBase TargetMethod() => DamageSourceNativeMethods.DarkOrbMoveNext()!;
-    [HarmonyTranspiler]
-    private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, MethodBase __originalMethod)
-    {
-        var native = DamageSourceNativeMethods.SingleDamage()!;
-        var replacement = AccessTools.Method(typeof(DamageSourceObserver), nameof(DamageSourceObserver.DarkOrbEvokeDamage))!;
-        var result = DamageSourceTranspiler.Replace(instructions, __originalMethod, native, replacement, Capability,
-            (typeof(DarkOrb), null)).ToList();
-        bool valid = result.Any(instruction => instruction.Calls(replacement));
-        DamageObservationCoverage.Require(Capability, valid);
-        return result;
-    }
+    private static readonly DamageSourceOrigin Origin = new("damage-source:dark-orb",
+        DamageSourceNativeMethods.DarkOrbMoveNext, DamageSourceNativeMethods.SingleDamage,
+        nameof(DamageSourceObserver.DarkOrbEvokeDamage), (typeof(DarkOrb), null));
+    [HarmonyPrepare] private static bool Prepare() => Origin.Prepare();
+    [HarmonyTargetMethod] private static MethodBase TargetMethod() => Origin.Target();
+    [HarmonyTranspiler] private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions,
+        MethodBase __originalMethod) => Origin.Transpile(instructions, __originalMethod);
 }
 
 [HarmonyPatch]
 internal static class Journal_ThornsDamageOrigin_Patch
 {
-    private const string Capability = "damage-source:thorns";
-    [HarmonyPrepare]
-    private static bool Prepare()
-    {
-        bool found = DamageSourceNativeMethods.ThornsMoveNext() != null && DamageSourceNativeMethods.SingleDamageWithCard() != null;
-        DamageObservationCoverage.Require(Capability, found); return found;
-    }
-    [HarmonyTargetMethod]
-    private static MethodBase TargetMethod() => DamageSourceNativeMethods.ThornsMoveNext()!;
-    [HarmonyTranspiler]
-    private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, MethodBase __originalMethod)
-    {
-        var native = DamageSourceNativeMethods.SingleDamageWithCard()!;
-        var replacement = AccessTools.Method(typeof(DamageSourceObserver), nameof(DamageSourceObserver.ThornsDamage))!;
-        var result = DamageSourceTranspiler.Replace(instructions, __originalMethod, native, replacement, Capability,
-            (typeof(ThornsPower), null)).ToList();
-        bool valid = result.Any(instruction => instruction.Calls(replacement));
-        DamageObservationCoverage.Require(Capability, valid);
-        return result;
-    }
+    private static readonly DamageSourceOrigin Origin = new("damage-source:thorns",
+        DamageSourceNativeMethods.ThornsMoveNext, DamageSourceNativeMethods.SingleDamageWithCard,
+        nameof(DamageSourceObserver.ThornsDamage), (typeof(ThornsPower), null));
+    [HarmonyPrepare] private static bool Prepare() => Origin.Prepare();
+    [HarmonyTargetMethod] private static MethodBase TargetMethod() => Origin.Target();
+    [HarmonyTranspiler] private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions,
+        MethodBase __originalMethod) => Origin.Transpile(instructions, __originalMethod);
 }
 
 [HarmonyPatch]
 internal static class Journal_FlameBarrierDamageOrigin_Patch
 {
-    private const string Capability = "damage-source:flame-barrier";
-    [HarmonyPrepare]
-    private static bool Prepare()
-    {
-        bool found = DamageSourceNativeMethods.FlameBarrierMoveNext() != null && DamageSourceNativeMethods.SingleDamage() != null;
-        DamageObservationCoverage.Require(Capability, found); return found;
-    }
-    [HarmonyTargetMethod]
-    private static MethodBase TargetMethod() => DamageSourceNativeMethods.FlameBarrierMoveNext()!;
-    [HarmonyTranspiler]
-    private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, MethodBase __originalMethod)
-    {
-        var native = DamageSourceNativeMethods.SingleDamage()!;
-        var replacement = AccessTools.Method(typeof(DamageSourceObserver), nameof(DamageSourceObserver.FlameBarrierDamage))!;
-        var result = DamageSourceTranspiler.Replace(instructions, __originalMethod, native, replacement, Capability,
-            (typeof(FlameBarrierPower), null)).ToList();
-        bool valid = result.Any(instruction => instruction.Calls(replacement));
-        DamageObservationCoverage.Require(Capability, valid);
-        return result;
-    }
+    private static readonly DamageSourceOrigin Origin = new("damage-source:flame-barrier",
+        DamageSourceNativeMethods.FlameBarrierMoveNext, DamageSourceNativeMethods.SingleDamage,
+        nameof(DamageSourceObserver.FlameBarrierDamage), (typeof(FlameBarrierPower), null));
+    [HarmonyPrepare] private static bool Prepare() => Origin.Prepare();
+    [HarmonyTargetMethod] private static MethodBase TargetMethod() => Origin.Target();
+    [HarmonyTranspiler] private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions,
+        MethodBase __originalMethod) => Origin.Transpile(instructions, __originalMethod);
 }
 
 [HarmonyPatch]
 internal static class Journal_ExplosiveArrowsDamageOrigin_Patch
 {
-    private const string Capability = "damage-source:explosive-arrows";
-    [HarmonyPrepare]
-    private static bool Prepare()
-    {
-        bool found = DamageSourceNativeMethods.ExplosiveArrowsMoveNext() != null && DamageSourceNativeMethods.LightningDamage() != null;
-        DamageObservationCoverage.Require(Capability, found); return found;
-    }
-    [HarmonyTargetMethod]
-    private static MethodBase TargetMethod() => DamageSourceNativeMethods.ExplosiveArrowsMoveNext()!;
-    [HarmonyTranspiler]
-    private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, MethodBase __originalMethod)
-    {
-        var native = DamageSourceNativeMethods.LightningDamage()!;
-        var replacement = AccessTools.Method(typeof(DamageSourceObserver), nameof(DamageSourceObserver.ExplosiveArrowsDamage))!;
-        var result = DamageSourceTranspiler.Replace(instructions, __originalMethod, native, replacement, Capability,
-            (typeof(ExplosiveArrowsPower), null)).ToList();
-        bool valid = result.Any(instruction => instruction.Calls(replacement));
-        DamageObservationCoverage.Require(Capability, valid);
-        return result;
-    }
+    private static readonly DamageSourceOrigin Origin = new("damage-source:explosive-arrows",
+        DamageSourceNativeMethods.ExplosiveArrowsMoveNext, DamageSourceNativeMethods.TargetsDamage,
+        nameof(DamageSourceObserver.ExplosiveArrowsDamage), (typeof(ExplosiveArrowsPower), null));
+    [HarmonyPrepare] private static bool Prepare() => Origin.Prepare();
+    [HarmonyTargetMethod] private static MethodBase TargetMethod() => Origin.Target();
+    [HarmonyTranspiler] private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions,
+        MethodBase __originalMethod) => Origin.Transpile(instructions, __originalMethod);
 }
 
 [HarmonyPatch]
 internal static class Journal_ViolentChordDamageOrigin_Patch
 {
-    private const string Capability = "damage-source:violent-chord";
-    [HarmonyPrepare]
-    private static bool Prepare()
-    {
-        bool found = DamageSourceNativeMethods.ViolentChordMoveNext() != null && DamageSourceNativeMethods.LightningDamage() != null;
-        DamageObservationCoverage.Require(Capability, found); return found;
-    }
-    [HarmonyTargetMethod]
-    private static MethodBase TargetMethod() => DamageSourceNativeMethods.ViolentChordMoveNext()!;
-    [HarmonyTranspiler]
-    private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, MethodBase __originalMethod)
-    {
-        var native = DamageSourceNativeMethods.LightningDamage()!;
-        var replacement = AccessTools.Method(typeof(DamageSourceObserver), nameof(DamageSourceObserver.ViolentChordDamage))!;
-        var result = DamageSourceTranspiler.Replace(instructions, __originalMethod, native, replacement, Capability,
-            (typeof(ViolentChordPower), null)).ToList();
-        bool valid = result.Any(instruction => instruction.Calls(replacement));
-        DamageObservationCoverage.Require(Capability, valid);
-        return result;
-    }
+    private static readonly DamageSourceOrigin Origin = new("damage-source:violent-chord",
+        DamageSourceNativeMethods.ViolentChordMoveNext, DamageSourceNativeMethods.TargetsDamage,
+        nameof(DamageSourceObserver.ViolentChordDamage), (typeof(ViolentChordPower), null));
+    [HarmonyPrepare] private static bool Prepare() => Origin.Prepare();
+    [HarmonyTargetMethod] private static MethodBase TargetMethod() => Origin.Target();
+    [HarmonyTranspiler] private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions,
+        MethodBase __originalMethod) => Origin.Transpile(instructions, __originalMethod);
 }

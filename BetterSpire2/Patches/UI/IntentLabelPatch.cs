@@ -22,7 +22,6 @@ internal static class NIntent_UpdateVisuals_Patch
         internal int Repeats;
     }
     private static readonly ConditionalWeakTable<NIntent, LabelCache> Labels = new();
-    private static ulong _lastError;
 
     [HarmonyPostfix]
     private static void Postfix(NIntent __instance, AbstractIntent ____intent, Creature ____owner,
@@ -60,9 +59,7 @@ internal static class NIntent_UpdateVisuals_Patch
         catch (Exception ex)
         {
             // A display-only enhancement must not break the game's native intent label or spam disk I/O.
-            ulong now = Time.GetTicksMsec();
-            if (_lastError == 0 || now - _lastError >= 10000)
-            { _lastError = now; ModLog.Error(nameof(NIntent_UpdateVisuals_Patch), ex); }
+            ModLog.ErrorThrottled(nameof(NIntent_UpdateVisuals_Patch), ex);
         }
     }
 }

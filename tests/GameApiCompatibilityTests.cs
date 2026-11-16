@@ -13,7 +13,6 @@ using System.Text.Json;
 
 internal static partial class GameApiCompatibilityTests
 {
-    private static int _checks;
 
     private static int Main()
     {
@@ -90,8 +89,9 @@ internal static partial class GameApiCompatibilityTests
             VerifyRemainingPatchTargets(game);
             VerifyFoolArrowWindow(game);
             VerifyV113EndTurnEffects(game);
+            VerifyModStructure(mod);
 
-            Console.WriteLine($"PASS {_checks} v0.113 metadata compatibility checks.");
+            Console.WriteLine($"PASS {Contract.Checks} v0.113 metadata compatibility checks.");
             return 0;
         }
         catch (Exception ex)
@@ -425,6 +425,31 @@ internal static partial class GameApiCompatibilityTests
             "compiled coverage guard recognizes native Wuppy redirection and bookkeeping");
     }
 
+    private static void VerifyModStructure(MetadataAssembly mod)
+    {
+        // ModEntry patches classes one by one (per-class failure isolation); an unregistered class is silently inert.
+        var patches = mod.TypesWithAttribute("HarmonyLib.HarmonyPatch");
+        var registered = mod.TypeofTargets("BetterSpire2.Core.ModEntry", ".cctor");
+        Check(patches.Length > 30, "Harmony patch classes discovered in the compiled mod");
+        foreach (string patch in patches)
+            Check(registered.Contains(patch), "ModEntry registers Harmony patch " + patch);
+        // The journal is the source of truth; views such as the damage meter read it, never the reverse.
+        var reverse = mod.CallsAcross("BetterSpire2.Journal", "BetterSpire2.DamageMeter");
+        Check(reverse.Length == 0, "journal does not drive its views: " + string.Join("; ", reverse));
+        Check(mod.Calls("BetterSpire2.Runtime.ModRuntime", "Tick", "BetterSpire2.DamageMeter.DamageMeterController", "Tick", 0),
+            "runtime ticks the damage meter itself");
+        // Combat boundaries reach features only through CombatLifecycle, which isolates each step.
+        const string lifecycle = "BetterSpire2.Runtime.CombatLifecycle";
+        foreach (var (patch, phase) in new[] { ("CombatManager_LoseCombat_Patch", "Ending"),
+            ("CombatManager_EndCombatInternal_Patch", "Ending"), ("CombatManager_Reset_Patch", "AfterReset") })
+        {
+            string type = "BetterSpire2.Patches.Combat." + patch;
+            Check(mod.CallsAcross(type, "BetterSpire2").All(call => call.EndsWith(lifecycle + "." + phase, StringComparison.Ordinal) ||
+                    call.EndsWith(lifecycle + ".BeforeReset", StringComparison.Ordinal)),
+                patch + " delegates to a CombatLifecycle phase only: " + string.Join("; ", mod.CallsAcross(type, "BetterSpire2")));
+            Check(mod.CallsAcross(type, "BetterSpire2").Length > 0, patch + " calls its lifecycle phase");
+        }
+    }
     private static void VerifyV113EndTurnEffects(MetadataAssembly game)
     {
         // PlayerEndTurnBuilder mirrors exactly one native damage command for each.
@@ -481,387 +506,6 @@ internal static partial class GameApiCompatibilityTests
             "combat cleanup removes old readouts and frame subscriptions");
     }
 
-    private static void Check(bool condition, string label)
-    {
-        if (!condition) throw new InvalidOperationException(label);
-        _checks++;
-    }
-
-    private static void Equal<T>(T expected, T actual, string label)
-    {
-        bool equal = expected is Array expectedArray && actual is Array actualArray
-            ? expectedArray.Cast<object>().SequenceEqual(actualArray.Cast<object>())
-            : EqualityComparer<T>.Default.Equals(expected, actual);
-        if (!equal) throw new InvalidOperationException($"{label}: expected {Format(expected)}, got {Format(actual)}");
-        _checks++;
-    }
-
-    private static string Format<T>(T value) => value is Array array
-        ? "[" + string.Join(", ", array.Cast<object>()) + "]"
-        : value?.ToString() ?? "null";
-
-    private sealed class MetadataAssembly : IDisposable
-    {
-        private readonly FileStream _stream;
-        private readonly PEReader _pe;
-        private readonly MetadataReader _metadata;
-        private readonly SignatureNames _names;
-
-        private MetadataAssembly(string path)
-        {
-            _stream = File.OpenRead(path);
-            _pe = new PEReader(_stream);
-            _metadata = _pe.GetMetadataReader();
-            _names = new SignatureNames();
-        }
-
-        internal static MetadataAssembly Open(string path) => new(path);
-        internal Guid ModuleVersionId => _metadata.GetGuid(_metadata.GetModuleDefinition().Mvid);
-
-        internal bool HasType(string fullName) => FindType(fullName).HasValue;
-
-        internal bool HasField(string fullName, string fieldName)
-        {
-            var handle = FindType(fullName);
-            return handle.HasValue && _metadata.GetTypeDefinition(handle.Value).GetFields()
-                .Any(field => _metadata.GetString(_metadata.GetFieldDefinition(field).Name) == fieldName);
-        }
-
-        internal int[] ParameterCounts(string fullName, string methodName)
-        {
-            var handle = FindType(fullName) ?? throw new TypeLoadException(fullName);
-            return _metadata.GetTypeDefinition(handle).GetMethods()
-                .Select(method => _metadata.GetMethodDefinition(method))
-                .Where(method => _metadata.GetString(method.Name) == methodName)
-                .Select(method => method.DecodeSignature(_names, genericContext: null).ParameterTypes.Length)
-                .Order().ToArray();
-        }
-
-        internal void RequireMethod(string fullName, string methodName, params string[] parameters)
-        {
-            var handle = FindType(fullName) ?? throw new TypeLoadException(fullName);
-            bool found = _metadata.GetTypeDefinition(handle).GetMethods()
-                .Select(method => _metadata.GetMethodDefinition(method))
-                .Where(method => _metadata.GetString(method.Name) == methodName)
-                .Select(method => method.DecodeSignature(_names, genericContext: null).ParameterTypes)
-                .Any(observed => observed.SequenceEqual(parameters));
-            Check(found, fullName + "." + methodName + "(" + string.Join(", ", parameters) + ")");
-        }
-
-        internal void RequireContract(string owner, string name, string returnType,
-            MethodAttributes access, bool isStatic, params string[] parameters)
-        {
-            var type = _metadata.GetTypeDefinition(FindType(owner) ?? throw new TypeLoadException(owner));
-            bool found = type.GetMethods().Select(h => _metadata.GetMethodDefinition(h)).Any(method =>
-            {
-                if (_metadata.GetString(method.Name) != name) return false;
-                var signature = method.DecodeSignature(_names, null);
-                return signature.ReturnType == returnType && signature.ParameterTypes.SequenceEqual(parameters) &&
-                    (method.Attributes & MethodAttributes.MemberAccessMask) == access &&
-                    ((method.Attributes & MethodAttributes.Static) != 0) == isStatic;
-            });
-            Check(found, "visibility/static/return/parameters: " + owner + "." + name);
-        }
-
-        internal void RequireNotificationOnlyOverrides(string owner, IEnumerable<string> hooks)
-        {
-            var expected = hooks.Concat(new[] { "get_ShouldReceiveCombatHooks", "AfterCloned" }).ToHashSet(StringComparer.Ordinal);
-            var definition = _metadata.GetTypeDefinition(FindType(owner) ?? throw new TypeLoadException(owner));
-            Check((definition.Attributes & TypeAttributes.Sealed) != 0, "observer is sealed; no subclass allowlist bypass");
-            foreach (var handle in definition.GetMethods())
-            {
-                var method = _metadata.GetMethodDefinition(handle);
-                if ((method.Attributes & MethodAttributes.Virtual) == 0) continue;
-                Check(expected.Remove(_metadata.GetString(method.Name)), "only audited notification/lifetime overrides");
-            }
-            Check(expected.Count == 0, "all audited observer overrides present");
-            // SavedProperty attributes would put observer state into serialization.
-            foreach (var property in definition.GetProperties())
-                foreach (var attr in _metadata.GetPropertyDefinition(property).GetCustomAttributes())
-                {
-                    var ctor = _metadata.GetCustomAttribute(attr).Constructor;
-                    if (ctor.Kind != HandleKind.MemberReference) continue;
-                    var parent = _metadata.GetMemberReference((MemberReferenceHandle)ctor).Parent;
-                    if (parent.Kind != HandleKind.TypeReference) continue;
-                    string attribute = _names.GetTypeFromReference(_metadata, (TypeReferenceHandle)parent, 0);
-                    Check(!attribute.EndsWith("SavedPropertyAttribute", StringComparison.Ordinal), "observer has no saved properties");
-                }
-        }
-
-        private TypeDefinitionHandle? FindType(string fullName)
-        {
-            foreach (var handle in _metadata.TypeDefinitions)
-            {
-                string observed = DefinitionName(handle);
-                if (observed == fullName) return handle;
-            }
-            return null;
-        }
-
-        private string DefinitionName(TypeDefinitionHandle handle)
-        {
-            var type = _metadata.GetTypeDefinition(handle);
-            string name = _metadata.GetString(type.Name);
-            if (!type.GetDeclaringType().IsNil) return DefinitionName(type.GetDeclaringType()) + "+" + name;
-            string ns = _metadata.GetString(type.Namespace);
-            return string.IsNullOrEmpty(ns) ? name : ns + "." + name;
-        }
-
-        internal HashSet<string> CallerTypes(string calleeOwner, string calleeName)
-        {
-            // Top-level declaring types, so async state machines report their owning model.
-            var callers = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var typeHandle in _metadata.TypeDefinitions)
-                foreach (var methodHandle in _metadata.GetTypeDefinition(typeHandle).GetMethods())
-                {
-                    var method = _metadata.GetMethodDefinition(methodHandle);
-                    if (method.RelativeVirtualAddress == 0) continue;
-                    foreach (var (op, token) in ReadInstructions(method))
-                    {
-                        if (op.OperandType != OperandType.InlineMethod) continue;
-                        var called = MetadataTokens.EntityHandle(token);
-                        if (called.Kind == HandleKind.MethodSpecification)
-                            called = _metadata.GetMethodSpecification((MethodSpecificationHandle)called).Method;
-                        if (called.Kind != HandleKind.MethodDefinition) continue;
-                        var target = _metadata.GetMethodDefinition((MethodDefinitionHandle)called);
-                        if (_metadata.GetString(target.Name) == calleeName && DefinitionName(target.GetDeclaringType()) == calleeOwner)
-                            callers.Add(DefinitionName(typeHandle).Split('+')[0]);
-                    }
-                }
-            return callers;
-        }
-        internal bool Calls(string owner, string methodName, string calleeOwner, string calleeName, int parameterCount) =>
-            CallCount(owner, methodName, calleeOwner, calleeName, parameterCount) > 0;
-
-        internal void RequireReadOnlyForecast(string owner)
-        {
-            foreach (var handle in _metadata.TypeDefinitions)
-            {
-                string typeName = DefinitionName(handle);
-                if (typeName != owner && !typeName.StartsWith(owner + "+", StringComparison.Ordinal)) continue;
-                foreach (var methodHandle in _metadata.GetTypeDefinition(handle).GetMethods())
-                {
-                    var method = _metadata.GetMethodDefinition(methodHandle);
-                    if (method.RelativeVirtualAddress == 0) continue;
-                    foreach (var instruction in ReadInstructions(method))
-                    {
-                        if (instruction.Op.OperandType != OperandType.InlineMethod) continue;
-                        var target = MetadataTokens.EntityHandle(instruction.Token);
-                        if (target.Kind == HandleKind.MethodSpecification)
-                            target = _metadata.GetMethodSpecification((MethodSpecificationHandle)target).Method;
-                        if (target.Kind != HandleKind.MemberReference) continue;
-                        var member = _metadata.GetMemberReference((MemberReferenceHandle)target);
-                        if (member.Parent.Kind != HandleKind.TypeReference) continue;
-                        string declaring = _names.GetTypeFromReference(_metadata, (TypeReferenceHandle)member.Parent, 0);
-                        string name = _metadata.GetString(member.Name);
-                        bool native = declaring.StartsWith("MegaCrit.Sts2.", StringComparison.Ordinal);
-                        Check(!(native && (name == "get_Rng" || declaring.Contains("Rng", StringComparison.Ordinal) ||
-                            declaring.StartsWith("MegaCrit.Sts2.Core.Commands.", StringComparison.Ordinal) ||
-                            name.StartsWith("set_", StringComparison.Ordinal))),
-                            "forecast does not call native RNG, commands or setters: " + declaring + "." + name);
-                    }
-                }
-            }
-        }
-
-        internal void RequireCompletedDamagePattern(string owner, string result)
-        {
-            var type = _metadata.GetTypeDefinition(FindType(owner) ?? throw new TypeLoadException(owner));
-            int matches = 0;
-            foreach (var nested in type.GetNestedTypes())
-            {
-                var definition = _metadata.GetTypeDefinition(nested);
-                if (!_metadata.GetString(definition.Name).StartsWith("<Damage>d__", StringComparison.Ordinal)) continue;
-                string nestedName = DefinitionName(nested);
-                if (!Calls(nestedName, "MoveNext", "MegaCrit.Sts2.Core.Combat.History.CombatHistory", "DamageReceived", 5)) continue;
-                foreach (var handle in definition.GetMethods())
-                {
-                    var method = _metadata.GetMethodDefinition(handle);
-                    if (_metadata.GetString(method.Name) != "MoveNext") continue;
-                    var instructions = ReadInstructions(method);
-                    bool IsGetter(int token, string name)
-                    {
-                        if (token == 0) return false;
-                        var h = MetadataTokens.EntityHandle(token);
-                        if (h.Kind != HandleKind.MethodDefinition) return false;
-                        var called = _metadata.GetMethodDefinition((MethodDefinitionHandle)h);
-                        return DefinitionName(called.GetDeclaringType()) == result && _metadata.GetString(called.Name) == name;
-                    }
-                    int index = instructions.FindIndex(i => i.Op.OperandType == OperandType.InlineMethod && IsGetter(i.Token, "get_UnblockedDamage"));
-                    Check(index >= 0 && index + 4 < instructions.Count &&
-                        instructions[index + 1].Op.Name!.StartsWith("ldloc", StringComparison.Ordinal) &&
-                        instructions[index + 2].Op == OpCodes.Ldfld &&
-                        IsGetter(instructions[index + 3].Token, "get_OverkillDamage") &&
-                        instructions[index + 4].Op == OpCodes.Add,
-                        "v113 completed-result HP + overkill observation pattern");
-                    matches++;
-                }
-            }
-            Equal(1, matches, "exactly one central damage result observation loop");
-        }
-
-        private List<(OpCode Op, int Token)> ReadInstructions(MethodDefinition method)
-        {
-            var instructions = new List<(OpCode, int)>();
-            var reader = _pe.GetMethodBody(method.RelativeVirtualAddress).GetILReader();
-            while (reader.RemainingBytes > 0)
-            {
-                byte first = reader.ReadByte();
-                var op = Opcodes[first == 0xfe ? unchecked((short)(0xfe00 | reader.ReadByte())) : first];
-                if (op.OperandType == OperandType.InlineMethod)
-                { instructions.Add((op, reader.ReadInt32())); continue; }
-                instructions.Add((op, 0));
-                int size = op.OperandType switch
-                {
-                    OperandType.InlineNone => 0,
-                    OperandType.ShortInlineBrTarget or OperandType.ShortInlineI or OperandType.ShortInlineVar => 1,
-                    OperandType.InlineVar => 2,
-                    OperandType.InlineI8 or OperandType.InlineR => 8,
-                    OperandType.InlineSwitch => checked(reader.ReadInt32() * 4),
-                    _ => 4
-                };
-                reader.Offset += size;
-            }
-            return instructions;
-        }
-
-        internal int CallCount(string owner, string methodName, string calleeOwner, string calleeName, int parameterCount)
-        {
-            int matches = 0;
-            foreach (int token in Operands(owner, methodName, OperandType.InlineMethod))
-            {
-                EntityHandle called = MetadataTokens.EntityHandle(token);
-                if (called.Kind == HandleKind.MethodSpecification)
-                    called = _metadata.GetMethodSpecification((MethodSpecificationHandle)called).Method;
-                string declaring, name; int count;
-                if (called.Kind == HandleKind.MethodDefinition)
-                {
-                    var target = _metadata.GetMethodDefinition((MethodDefinitionHandle)called);
-                    declaring = DefinitionName(target.GetDeclaringType());
-                    name = _metadata.GetString(target.Name);
-                    count = target.DecodeSignature(_names, null).ParameterTypes.Length;
-                }
-                else if (called.Kind == HandleKind.MemberReference)
-                {
-                    var target = _metadata.GetMemberReference((MemberReferenceHandle)called);
-                    declaring = target.Parent.Kind switch
-                    {
-                        HandleKind.TypeReference => _names.GetTypeFromReference(_metadata, (TypeReferenceHandle)target.Parent, 0),
-                        HandleKind.TypeDefinition => DefinitionName((TypeDefinitionHandle)target.Parent),
-                        _ => ""
-                    };
-                    name = _metadata.GetString(target.Name);
-                    count = target.DecodeMethodSignature(_names, null).ParameterTypes.Length;
-                }
-                else continue;
-                if (declaring == calleeOwner && name == calleeName && count == parameterCount) matches++;
-            }
-            return matches;
-        }
-
-        internal IEnumerable<string> Literals(string owner, string methodName) =>
-            Operands(owner, methodName, OperandType.InlineString)
-                .Select(token => _metadata.GetUserString(MetadataTokens.UserStringHandle(token & 0x00ffffff)));
-
-        internal bool UsesTypeArgument(string owner, string methodName, string type) =>
-            Operands(owner, methodName, OperandType.InlineMethod).Select(MetadataTokens.EntityHandle)
-                .Where(handle => handle.Kind == HandleKind.MethodSpecification)
-                .Any(handle => _metadata.GetMethodSpecification((MethodSpecificationHandle)handle)
-                    .DecodeSignature(_names, null).Contains(type));
-
-        private List<int> Operands(string owner, string methodName, OperandType operandType)
-        {
-            var operands = new List<int>();
-            var type = _metadata.GetTypeDefinition(FindType(owner) ?? throw new TypeLoadException(owner));
-            var methods = type.GetMethods().Where(h => _metadata.GetString(_metadata.GetMethodDefinition(h).Name) == methodName).ToList();
-            // An async method's real calls live in MoveNext, not the wrapper body.
-            foreach (var nested in type.GetNestedTypes())
-            {
-                var definition = _metadata.GetTypeDefinition(nested);
-                if (_metadata.GetString(definition.Name).StartsWith("<" + methodName + ">d__", StringComparison.Ordinal))
-                    methods.AddRange(definition.GetMethods().Where(h => _metadata.GetString(_metadata.GetMethodDefinition(h).Name) == "MoveNext"));
-            }
-            foreach (var handle in methods)
-            {
-                var method = _metadata.GetMethodDefinition(handle);
-                if (method.RelativeVirtualAddress == 0) continue;
-                var reader = _pe.GetMethodBody(method.RelativeVirtualAddress).GetILReader();
-                while (reader.RemainingBytes > 0)
-                {
-                    byte first = reader.ReadByte();
-                    short code = first == 0xfe ? unchecked((short)(0xfe00 | reader.ReadByte())) : first;
-                    var op = Opcodes[code];
-                    if (op.OperandType == operandType)
-                    {
-                        operands.Add(reader.ReadInt32());
-                        continue;
-                    }
-                    int size = op.OperandType switch
-                    {
-                        OperandType.InlineNone => 0,
-                        OperandType.ShortInlineBrTarget or OperandType.ShortInlineI or OperandType.ShortInlineVar => 1,
-                        OperandType.InlineVar => 2,
-                        OperandType.InlineI8 or OperandType.InlineR => 8,
-                        OperandType.InlineSwitch => checked(reader.ReadInt32() * 4),
-                        _ => 4
-                    };
-                    reader.Offset += size;
-                }
-            }
-            return operands;
-        }
-
-        private static readonly Dictionary<short, OpCode> Opcodes = typeof(OpCodes).GetFields(BindingFlags.Public | BindingFlags.Static)
-            .Where(f => f.FieldType == typeof(OpCode)).Select(f => (OpCode)f.GetValue(null)!)
-            .ToDictionary(op => op.Value);
-
-        public void Dispose() { _pe.Dispose(); _stream.Dispose(); }
-    }
-
-    private sealed class SignatureNames : ISignatureTypeProvider<string, object?>
-    {
-        public string GetArrayType(string elementType, ArrayShape shape) => elementType + "[" + new string(',', shape.Rank - 1) + "]";
-        public string GetByReferenceType(string elementType) => elementType + "&";
-        public string GetFunctionPointerType(MethodSignature<string> signature) => "methodptr";
-        public string GetGenericInstantiation(string genericType, ImmutableArray<string> arguments) =>
-            genericType.Split('`')[0] + "<" + string.Join(",", arguments) + ">";
-        public string GetGenericMethodParameter(object? genericContext, int index) => "!!" + index;
-        public string GetGenericTypeParameter(object? genericContext, int index) => "!" + index;
-        public string GetModifiedType(string modifierType, string unmodifiedType, bool isRequired) => unmodifiedType;
-        public string GetPinnedType(string elementType) => elementType;
-        public string GetPointerType(string elementType) => elementType + "*";
-        public string GetPrimitiveType(PrimitiveTypeCode typeCode) => typeCode switch
-        {
-            PrimitiveTypeCode.Boolean => "System.Boolean", PrimitiveTypeCode.Byte => "System.Byte",
-            PrimitiveTypeCode.Char => "System.Char", PrimitiveTypeCode.Double => "System.Double",
-            PrimitiveTypeCode.Int16 => "System.Int16", PrimitiveTypeCode.Int32 => "System.Int32",
-            PrimitiveTypeCode.Int64 => "System.Int64", PrimitiveTypeCode.IntPtr => "System.IntPtr",
-            PrimitiveTypeCode.Object => "System.Object", PrimitiveTypeCode.SByte => "System.SByte",
-            PrimitiveTypeCode.Single => "System.Single", PrimitiveTypeCode.String => "System.String",
-            PrimitiveTypeCode.TypedReference => "System.TypedReference", PrimitiveTypeCode.UInt16 => "System.UInt16",
-            PrimitiveTypeCode.UInt32 => "System.UInt32", PrimitiveTypeCode.UInt64 => "System.UInt64",
-            PrimitiveTypeCode.UIntPtr => "System.UIntPtr", PrimitiveTypeCode.Void => "System.Void",
-            _ => typeCode.ToString()
-        };
-        public string GetSZArrayType(string elementType) => elementType + "[]";
-        public string GetTypeFromDefinition(MetadataReader reader, TypeDefinitionHandle handle, byte rawTypeKind)
-        {
-            var type = reader.GetTypeDefinition(handle);
-            return FullName(reader, type.Namespace, type.Name);
-        }
-        public string GetTypeFromReference(MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind)
-        {
-            var type = reader.GetTypeReference(handle);
-            return FullName(reader, type.Namespace, type.Name);
-        }
-        public string GetTypeFromSpecification(MetadataReader reader, object? genericContext,
-            TypeSpecificationHandle handle, byte rawTypeKind) =>
-            reader.GetTypeSpecification(handle).DecodeSignature(this, genericContext);
-        private static string FullName(MetadataReader reader, StringHandle ns, StringHandle name)
-        {
-            string namespaceName = reader.GetString(ns);
-            return string.IsNullOrEmpty(namespaceName) ? reader.GetString(name) :
-                namespaceName + "." + reader.GetString(name);
-        }
-    }
+    private static void Check(bool condition, string label) => Contract.Check(condition, label);
+    private static void Equal<T>(T expected, T actual, string label) => Contract.Equal(expected, actual, label);
 }

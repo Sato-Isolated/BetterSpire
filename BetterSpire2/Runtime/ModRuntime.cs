@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using BetterSpire2.DamageMeter;
 using BetterSpire2.Journal.Game;
 using BetterSpire2.Runtime.Native;
 using Godot;
@@ -15,7 +16,6 @@ internal static class ModRuntime
     private static Timer? _timer;
     private static ulong _nextJournal, _nextClock;
     private static bool _ticking;
-    private static readonly Dictionary<string, ulong> LastErrors = new();
 
     internal static void EnsureStarted()
     {
@@ -40,28 +40,28 @@ internal static class ModRuntime
         try
         {
             ulong now = Time.GetTicksMsec();
-            TryTick("NativeHooks", NativeCombatHooks.FlushPending, now);
-            TryTick("Guardian", () => DamageTracker.Tick(now), now);
-            TryTick("HandViewer", TeammateHandViewer.FlushPendingChanges, now);
-            TryTick("Settings", SettingsMenu.RefreshBindings, now);
-            if (now >= _nextJournal) { _nextJournal = now + 200; TryTick("Journal", JournalService.Tick, now); }
-            if (now >= _nextClock) { _nextClock = now + 1000; TryTick("Clock", ClockDisplay.Update, now); }
+            TryTick("NativeHooks", NativeCombatHooks.FlushPending);
+            TryTick("Guardian", () => DamageTracker.Tick(now));
+            TryTick("HandViewer", TeammateHandViewer.FlushPendingChanges);
+            TryTick("Settings", SettingsMenu.RefreshBindings);
+            if (now >= _nextJournal)
+            {
+                _nextJournal = now + 200;
+                TryTick("Journal", JournalService.Tick);
+                TryTick("DamageMeter", DamageMeterController.Tick); // reads the frame the journal just produced
+            }
+            if (now >= _nextClock) { _nextClock = now + 1000; TryTick("Clock", ClockDisplay.Update); }
         }
         finally { _ticking = false; }
     }
-    private static void TryTick(string module, Action action, ulong now)
+    private static void TryTick(string module, Action action)
     {
         try { action(); }
-        catch (Exception ex)
-        {
-            if (!LastErrors.TryGetValue(module, out ulong last) || now - last >= 10000)
-            { LastErrors[module] = now; ModLog.Error("Runtime.Tick." + module, ex); }
-        }
+        catch (Exception ex) { ModLog.ErrorThrottled("Runtime.Tick." + module, ex); }
     }
     internal static void Stop()
     {
         // Teardown failures in one module must not leak into NGame._ExitTree or strand other observers.
-        LastErrors.Clear();
         NGame_Input_Patch.ResetOwnedKeys();
         Cleanup(ReleaseTimer);
         Cleanup(NativeCombatHooks.Stop);
@@ -81,11 +81,7 @@ internal static class ModRuntime
         PartyManager.MapDrawings = null;
         PartyManager.ClearMutes();
     }
-    private static void Cleanup(Action action)
-    {
-        try { action(); }
-        catch (Exception ex) { ModLog.Error("Runtime.Stop", ex); }
-    }
+    private static void Cleanup(Action action) => ModLog.Guard("Runtime.Stop", action);
 
     private static void ReleaseTimer()
     {
