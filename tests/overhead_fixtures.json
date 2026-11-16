@@ -399,7 +399,7 @@
     ]
   },
   {
-    "Name": "Partial lethal stays red",
+    "Name": "Partial lethal uses uncertainty color",
     "Input": {
       "Actors": [
         {
@@ -427,7 +427,7 @@
       {
         "Actor": "p",
         "Text": "0 (70)",
-        "Severity": "Lethal",
+        "Severity": "Uncertain",
         "DangerVisible": true
       }
     ]

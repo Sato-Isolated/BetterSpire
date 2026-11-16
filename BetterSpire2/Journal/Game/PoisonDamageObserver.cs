@@ -31,6 +31,13 @@ internal static class PoisonDamageObserver
     internal static IDisposable EnterCommand() => Scope.EnterCommand();
     internal static bool TryGetCredit(DamageResult result, out PoisonDamageCredit credit) =>
         _credits.TryGetValue(result, out credit!);
+    internal static void TagResult(DamageResult result, CombatRecord combat)
+    {
+        var source = Scope.Current;
+        if (source != null && ReferenceEquals(source.Target, result.Receiver) &&
+            ReferenceEquals(source.Combat, combat))
+            _credits.GetValue(result, _ => source.Credit);
+    }
 
     // Replaces ONLY PoisonPower's direct native Damage call. The extra argument
     // is the actual PoisonPower instance, obtained from its async state machine.

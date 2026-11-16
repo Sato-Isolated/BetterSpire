@@ -92,6 +92,82 @@ internal static class JournalTests
         Check(empty.HeroValues.All(v => v == "—"), "no fake zeros without observations");
         s.MarkPartial(); fr = JournalReportBuilder.Build(s, selection, false, 0, true);
         Check(fr.Note.Contains("incomplet"), "partial capture disclosed inside journal");
+        s.MarkPartial("damage.results");
+        s.MarkPartial("damage.results");
+        s.MarkPartial("effect.strangle");
+        fr = JournalReportBuilder.Build(s, selection, false, 0, true);
+        Check(s.Active!.PartialReasons.Count == 2, "partial reasons are retained once each");
+        var reasonDetails = fr.Rows.Where(row => row.Detail != null).Select(row => row.Detail!).ToArray();
+        Check(reasonDetails.Any(detail => detail.Contains("résultats natifs", StringComparison.OrdinalIgnoreCase)) &&
+            reasonDetails.Any(detail => detail.Contains("Étranglement", StringComparison.OrdinalIgnoreCase)),
+            "journal names the missing observation capabilities");
+
+        var attributed = Make("convention-run");
+        var pool = new PoisonStackPool();
+        pool.ObserveChange("p1", 3); pool.ObserveChange("p2", 1);
+        var poison = DamageAccounting.Record(attributed, 1, JournalPhase.Player, 8, 4, 20,
+            null, "effect:poison", "Poison", false, false, false, poison: pool.Capture(4));
+        Check(poison.Kind == DamageAttributionKind.PoisonConvention, "poison allocation reports its convention");
+        Check(attributed.Query(JournalScope.Combat, "c1", 1, "p1").ConventionDamage[Stat.DamageDealtHp] == 6,
+            "convention HP share is tracked separately for its player");
+        Check(attributed.Query(JournalScope.Combat, "c1", 1, "p1").ConventionDamage[Stat.DamageDealtBlocked] == 3,
+            "convention block share is tracked separately for its player");
+        Check(attributed.Query(JournalScope.Combat, "c1", 1, "p1").ConventionDamage[Stat.Overkill] == 15,
+            "convention overkill share is tracked separately for its player");
+        Check(attributed.Query(JournalScope.Combat, "c1", 1, "p1").Totals[Stat.DamageDealtHp] == 6,
+            "recording convention metadata does not change attributed totals");
+        DamageAccounting.Record(attributed, 1, JournalPhase.Player, 2, 1, 5,
+            "p1", "card:direct", "Direct", true, false, false);
+        var damageReport = JournalReportBuilder.Build(attributed, new JournalSelection(), false, 0, false);
+        Check(damageReport.Rows.Any(row => row.Label.Contains("Direct attribution", StringComparison.Ordinal) && row.Value.Contains("2 / 1 / 5")) &&
+            damageReport.Rows.Any(row => row.Label.Contains("Poison/Doom split", StringComparison.Ordinal) && row.Value.Contains("6 / 3 / 15")),
+            "F5 separates direct and conventional damage while preserving totals");
+        var doom = DamageAccounting.Record(attributed, 1, JournalPhase.Enemy, 4, 0, 0,
+            null, "effect:unknown", "", false, false, false,
+            effect: new EffectDamageCredit("effect:doom", "Doom", StackCredit: pool.Capture(4)));
+        Check(doom.Kind == DamageAttributionKind.DoomConvention, "Doom uses a separately named convention");
+        Check(attributed.Query(JournalScope.Combat, "c1", 1, "p1").ConventionDamage[Stat.DamageDealtHp] == 9,
+            "Doom share is added to convention metadata without changing the poison split");
+        var effectSources = Make("effect-sources");
+        foreach (string sourceId in new[] { "effect:lightning-passive", "effect:lightning-evoke", "effect:dark-orb-evoke", "effect:thorns", "effect:flame-barrier" })
+            effectSources.Append(new JournalEvent("p1", 1, JournalPhase.Player, Stat.DamageDealtHp, 1, sourceId));
+        var effectSourceReport = JournalReportBuilder.Build(effectSources, new JournalSelection(), true, 0, false);
+        Check(new[] { "Lightning orb (passive)", "Lightning orb (evoke)", "Dark orb (evoke)", "Thorns", "Flame Barrier" }
+            .All(name => effectSourceReport.Rows.Any(row => row.Label == name)),
+            "identified indirect sources receive readable source labels");
+        var frenchSources = JournalReportBuilder.Build(effectSources, new JournalSelection(), true, 0, true);
+        Check(new[] { "Orbe de foudre (passif)", "Orbe de foudre (évocation)", "Orbe des ténèbres (évocation)", "Épines", "Barrière de feu" }
+            .All(name => frenchSources.Rows.Any(row => row.Label == name)),
+            "native source identities use the currently selected journal language");
+        Check(attributed.Active!.ConventionAttributionVersion == 1, "new combats mark convention attribution available");
+        attributed.MarkPartial("damage.results");
+        attributed.Complete(CombatOutcome.Won);
+        string conventionPath = Path.Combine(Path.GetTempPath(), "betterspire-convention-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var checkpoint = new JournalCheckpoint().Capture(attributed.Run!);
+            var archive = new JournalArchive(conventionPath);
+            archive.Save(checkpoint);
+            var restored = archive.Load()!;
+            Check(restored.Combats[0].PartialReasons.Single() == "damage.results",
+                "partial reasons persist through the archive");
+            Check(restored.Combats[0].Rounds[0].Players["p1"].ConventionDamage[Stat.DamageDealtHp] == 9,
+                "convention aggregates persist through the checkpoint and archive");
+        }
+        finally
+        {
+            foreach (string suffix in new[] { "", ".bak", ".tmp" })
+                if (File.Exists(conventionPath + suffix)) File.Delete(conventionPath + suffix);
+        }
+        const string oldArchive = "{\"Key\":\"legacy-attribution\",\"Players\":{\"p1\":{\"Id\":\"p1\",\"Name\":\"Local\",\"IsLocal\":true}},\"Combats\":[{\"Key\":\"c1\",\"Encounter\":\"Enemy\",\"Act\":1,\"Floor\":1,\"LatestRound\":1,\"Rounds\":[{\"Number\":1,\"Players\":{\"p1\":{\"Totals\":{\"Values\":{\"DamageDealtHp\":10}}}}}]}]}";
+        var oldRun = System.Text.Json.JsonSerializer.Deserialize<RunJournal>(oldArchive)!;
+        JournalArchive.Validate(oldRun);
+        var oldSession = new JournalSession(); oldSession.Attach(oldRun);
+        var oldReport = JournalReportBuilder.Build(oldSession, new JournalSelection(), false, 0, false);
+        Check(oldRun.Combats[0].ConventionAttributionVersion == 0, "missing convention metadata identifies a legacy archive");
+        Check(oldReport.Rows.Any(row => row.Label.Contains("Direct / poison-Doom", StringComparison.Ordinal) &&
+            row.Value.Contains("unavailable", StringComparison.OrdinalIgnoreCase)),
+            "legacy archive reports convention attribution as unavailable");
         var line = new StatLine(); line.Add(Stat.DamageDealtHp, long.MaxValue); line.Add(Stat.DamageDealtHp, 50);
         Equal(long.MaxValue, line[Stat.DamageDealtHp], "saturating counters");
         for (int i = 0; i < 1000; i++) s.Append(new("p1", 1, JournalPhase.Player, Stat.CardsPlayed, 1, "card:" + i, "Card " + i, true));
@@ -99,9 +175,9 @@ internal static class JournalTests
         Equal(1006, Q(s, Stat.CardsPlayed), "bounded source list does not lose aggregate totals");
         selection.SelectScope(JournalScope.Run);
         var runReport = JournalReportBuilder.Build(s, selection, false, 0, false);
-        Check(runReport.Rows[0].CombatKey == "c1", "run rows navigate to combat");
+        Check(runReport.Rows.Any(row => row.CombatKey == "c1"), "run rows navigate to combat");
         var runDetails = JournalReportBuilder.Build(s, selection, false, 0, false, runDetails: true);
-        Check(runDetails.Rows[0].Label.Contains("Block gained") && runDetails.Rows.All(row => row.CombatKey == null),
+        Check(runDetails.Rows.Any(row => row.Label.Contains("Block gained")) && runDetails.Rows.All(row => row.CombatKey == null),
             "run-wide detailed metrics accessible independently of combat history");
         selection.SelectCombat(s.Run!, "c1");
         Check(selection.Scope == JournalScope.Combat && !selection.FollowLive, "clicking fight selects fixed fight");

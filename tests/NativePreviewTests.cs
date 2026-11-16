@@ -49,7 +49,10 @@ internal static class NativePreviewTests
             Check(ForecastHookPolicy.IsReaction("BeforeDamageGiven"), "before damage guarded");
             Check(ForecastHookPolicy.IsReaction("AfterDiedToDoom"), "Doom death reaction guarded");
             Check(ForecastHookPolicy.IsReaction("AfterNewFutureEffect"), "new reaction defaults uncertain");
+            Check(ForecastHookPolicy.IsReaction("ModifyPreBlockDamageTarget"), "unknown pre-block redirects remain guarded despite native Wuppy support");
             Check(!ForecastHookPolicy.IsReaction("ModifyDamageAdditive"), "pure modifier remains native");
+            checks += WuppyBoundaryTests.Run();
+            checks += FoolBoundaryTests.Run();
             Console.WriteLine($"PASS {checks} source-linked preview isolation and forecast-coverage checks (not game rendering).");
             return 0;
         }
@@ -71,7 +74,7 @@ namespace MegaCrit.Sts2.Core.Models
         public Variables Clone() { var result = new Variables(); foreach (var p in this) result[p.Key] = p.Value.Clone(); return result; }
         public void ClearPreview() { foreach (var v in Values) v.Preview = 4; }
     }
-    public abstract class AbstractModel
+    public abstract partial class AbstractModel
     {
         public event Action? ExecutionFinished;
         public AbstractModel MutableClone()

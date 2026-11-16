@@ -11,6 +11,8 @@ using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Hooks;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Cards;
+using MegaCrit.Sts2.Core.Models.Orbs;
 using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.ValueProps;
@@ -24,6 +26,11 @@ namespace BetterSpire2.Guardian.Game;
 /// </summary>
 internal sealed partial class GameForecastAdapter
 {
+    private static readonly Guid SupportedGameModuleVersion = new("ad562b4e-7352-4ca2-ae45-0ff44cd284bc");
+    private static readonly bool CurrentBuildIsSupported =
+        typeof(CombatState).Module.ModuleVersionId == SupportedGameModuleVersion;
+    internal static bool IsSupportedGameBuild => CurrentBuildIsSupported;
+
     private readonly CombatState _state;
     private readonly Player _local;
     private readonly AbstractModel[] _combatListeners;
@@ -50,21 +57,27 @@ internal sealed partial class GameForecastAdapter
 
     internal ForecastResult Capture()
     {
-        if (typeof(CombatState).Module.ModuleVersionId != new Guid("73b63ee0-6c0a-47bb-b0d1-b21f6d94222e"))
-            Warn(T("Different game build: formulas require revalidation.", "Autre version du jeu : formules à revalider."));
+        string? compatibilityNotice = IsSupportedGameBuild ? null :
+            T("Formulas may need revalidation for this game build.",
+                "Les formules peuvent nécessiter une revalidation pour cette version du jeu.");
         CapabilityAudit.Inspect(_runListeners.Concat(_combatListeners).Distinct(), Warn);
         if (_state.Players.Count > 1)
             Warn(T("Team actions and targeting may change this forecast.",
                 "Les actions et le ciblage en équipe peuvent modifier cette prévision."));
         if (_combatListeners.OfType<DoomPower>().Any(p => p.Amount > 0))
-            Warn(T("Doom: death checks and chained reactions are not simulated; healing/orbs can change the outcome.",
-                "Doom : seuils de mort et réactions en chaîne non simulés ; soins/orbes peuvent modifier le résultat."));
+        {
+            var doom = _combatListeners.OfType<DoomPower>().First(p => p.Amount > 0);
+            if (CapabilityAudit.HasUnresolvedDeathReaction(_runListeners.Concat(_combatListeners).Distinct(), doom.Owner))
+                Warn(T("Doom deaths can trigger unsupported death or revival reactions.",
+                    "Les morts par Doom peuvent déclencher des réactions de mort ou de résurrection non simulées."));
+        }
         var actors = _creatures.Select(CaptureActor).ToArray();
         BuildPlayerEndTurn();
         BuildEnemyTurn();
         var input = new ForecastInput(actors, _events, _warnings.ToArray(), Id(_local.Creature),
             _state.Enemies.Select(Id).ToArray());
-        return ForecastSimulator.Run(input);
+        var result = ForecastSimulator.Run(input);
+        return compatibilityNotice == null ? result : result with { CompatibilityNotice = compatibilityNotice };
     }
 
     private ActorSnapshot CaptureActor(Creature creature)
@@ -72,6 +85,7 @@ internal sealed partial class GameForecastAdapter
         var rules = new List<HpRule>();
         decimal alreadyReceived = 0;
         int reviveHp = 0;
+        decimal doomThreshold = 0;
         foreach (var listener in _runListeners)
         {
             if (!ReferenceEquals(Owner(listener), creature)) continue;
@@ -96,6 +110,17 @@ internal sealed partial class GameForecastAdapter
                     break;
             }
         }
+        foreach (var doom in _combatListeners.OfType<DoomPower>())
+            if (ReferenceEquals(doom.Owner, creature)) doomThreshold = Math.Max(doomThreshold, doom.Amount);
+        var reactions = new List<DamageReaction>();
+        foreach (var power in _combatListeners.OfType<PowerModel>())
+        {
+            if (!ReferenceEquals(power.Owner, creature) || power.Amount <= 0) continue;
+            if (power is ThornsPower)
+                reactions.Add(CaptureDamageReaction(power, DamageReactionKind.Thorns));
+            else if (power is FlameBarrierPower)
+                reactions.Add(CaptureDamageReaction(power, DamageReactionKind.FlameBarrier));
+        }
         // The engine finishes every normal HP modifier BEFORE any Late modifier.
         foreach (var listener in _runListeners)
             if (listener is BufferPower buffer && buffer.Owner == creature && buffer.Amount > 0)
@@ -105,10 +130,20 @@ internal sealed partial class GameForecastAdapter
         if (redirectors.Length > 1)
             Warn(T("Multiple pet redirects: ordering is uncertain.", "Plusieurs redirections de familier : ordre incertain."));
         var redirect = redirectors.LastOrDefault()?.Owner;
+        var preBlockRedirectors = _combatListeners.OfType<WuppysLoyaltyPower>()
+            .Where(p => p.Owner.IsAlive && p.Owner.PetOwner?.Creature == creature).ToArray();
+        if (preBlockRedirectors.Length > 1)
+            Warn(T("Multiple pre-block pet redirects: ordering is uncertain.",
+                "Plusieurs redirections avant blocage : ordre incertain."));
+        var preBlockRedirect = preBlockRedirectors.LastOrDefault()?.Owner;
         return new ActorSnapshot(Id(creature), creature.Name, creature.CurrentHp, creature.MaxHp,
             creature.Block, creature.PetOwner is { } owner ? Id(owner.Creature) : null,
             redirect != null && _ids.ContainsKey(redirect) ? Id(redirect) : null,
-            rules, alreadyReceived, reviveHp, creature.IsPlayer);
+            rules, alreadyReceived, reviveHp, creature.IsPlayer, doomThreshold, reactions)
+        {
+            RedirectPoweredAttacksBeforeBlockTo = preBlockRedirect != null && _ids.ContainsKey(preBlockRedirect)
+                ? Id(preBlockRedirect) : null
+        };
     }
 
     private void Damage(Creature target, decimal raw, ValueProp props, string source, string phase,
@@ -117,17 +152,65 @@ internal sealed partial class GameForecastAdapter
     {
         dealer ??= card?.Owner?.Creature;
         if (!_ids.ContainsKey(target)) { Warn(T("Target unavailable.", "Cible indisponible.")); return; }
-        decimal modified = Hook.ModifyDamage(_state.RunState, _state, target, dealer!, raw, props,
+        var damage = CaptureTargetDamage(target, dealer!, raw, props, card);
+        bool powered = (props & ValueProp.Move) != 0 && (props & ValueProp.Unpowered) == 0;
+        _events.Add(new(ForecastEventKind.Damage, Id(target), source, damage.Amount,
+            damage.BypassesBlock, powered, damage.DamageCap,
+            dealer != null && _ids.TryGetValue(dealer, out var id) ? id : null,
+            requireDealer || dealer != null, phase, stopOnVictory, powered));
+    }
+
+    private void DamageCommand(IEnumerable<Creature> targets, decimal raw, ValueProp props,
+        string source, string phase, Creature dealer, bool stopOnVictory = false)
+    {
+        var targetOptions = targets.Where(_ids.ContainsKey)
+            .Select(target => CaptureTargetDamage(target, dealer, raw, props, null)).ToArray();
+        if (targetOptions.Length == 0) return;
+        bool powered = (props & ValueProp.Move) != 0 && (props & ValueProp.Unpowered) == 0;
+        _events.Add(new(ForecastEventKind.DamageCommand, targetOptions[0].Target, source, raw,
+            (props & ValueProp.Unblockable) != 0, powered, Attacker: Id(dealer),
+            RequireLivingAttacker: true, Phase: phase, StopWhenNoEnemies: stopOnVictory,
+            TriggersThorns: powered, TargetOptions: targetOptions));
+    }
+
+    private ForecastTargetDamage CaptureTargetDamage(Creature target, Creature dealer,
+        decimal raw, ValueProp props, CardModel? card)
+    {
+        decimal modified = Hook.ModifyDamage(_state.RunState, _state, target, dealer, raw, props,
             card!, null, ModifyDamageHookType.Additive | ModifyDamageHookType.Multiplicative,
             CardPreviewMode.None, out _);
         decimal cap = decimal.MaxValue;
         foreach (var model in _runListeners)
-            cap = Math.Min(cap, model.ModifyDamageCap(target, props, dealer!, card!, null));
-        bool powered = (props & ValueProp.Move) != 0 && (props & ValueProp.Unpowered) == 0;
-        _events.Add(new(ForecastEventKind.Damage, Id(target), source, modified,
-            (props & ValueProp.Unblockable) != 0, powered, cap,
-            dealer != null && _ids.TryGetValue(dealer, out var id) ? id : null,
-            requireDealer, phase, stopOnVictory));
+            cap = Math.Min(cap, model.ModifyDamageCap(target, props, dealer, card!, null));
+        return new ForecastTargetDamage(Id(target), modified,
+            (props & ValueProp.Unblockable) != 0, cap);
+    }
+
+    private DamageReaction CaptureDamageReaction(PowerModel power, DamageReactionKind kind)
+    {
+        var amounts = new Dictionary<string, decimal>(StringComparer.Ordinal);
+        foreach (var target in _creatures)
+        {
+            var damage = CaptureTargetDamage(target, power.Owner, power.Amount, ValueProp.Unpowered, null);
+            amounts[damage.Target] = Math.Max(0, Math.Min(damage.Amount, damage.DamageCap));
+        }
+        return new DamageReaction(kind, power.Amount, Source(power), amounts);
+    }
+
+    private void AddDoomCheck(IEnumerable<Creature> side, IEnumerable<Creature> participants, string phase)
+    {
+        var affected = side.Where(_ids.ContainsKey).ToArray();
+        if (affected.Length == 0) return;
+        var participantSet = participants.Where(_ids.ContainsKey).ToHashSet();
+        var eligibleOwners = _combatListeners.OfType<DoomPower>()
+            .Where(power => power.Amount > 0 && participantSet.Contains(power.Owner))
+            .Select(power => Id(power.Owner)).Distinct(StringComparer.Ordinal).ToArray();
+        if (eligibleOwners.Length == 0) return;
+
+        _events.Add(new ForecastEvent(ForecastEventKind.DoomCheck, Id(affected[0]),
+            T("Doom", "Doom"), 0, Phase: phase,
+            AffectedActors: affected.Select(Id).ToArray(), EligibleOwners: eligibleOwners,
+            StopWhenCombatOver: true));
     }
 
     private void Block(Creature target, decimal raw, ValueProp props, string source, string phase)
@@ -180,6 +263,7 @@ internal sealed partial class GameForecastAdapter
                 RelicModel relic => relic.Title.GetFormattedText(),
                 PowerModel power => power.Title.GetFormattedText(),
                 CardModel card => card.Title,
+                OrbModel orb => orb.Title.GetFormattedText(),
                 _ => model.GetType().Name
             };
         }

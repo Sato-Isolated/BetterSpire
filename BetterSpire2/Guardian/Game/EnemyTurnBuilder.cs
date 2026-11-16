@@ -58,16 +58,32 @@ internal sealed partial class GameForecastAdapter
                 if (attack is not (SingleAttackIntent or MultiAttackIntent))
                     Warn(T("Custom attack intent: targeting/order not certified.",
                         "Intention d'attaque personnalisée : ciblage/ordre non certifié."));
-                // AttackCommand resolves one hit across the targets before its next hit.
-                foreach (var (player, hit) in ForecastTurnOrder.AttackHits(_state.Players, repeats))
+                // AttackCommand issues one grouped Damage command per hit, after checking
+                // whether the attacker survived the previous command.
+                foreach (var hit in ForecastTurnOrder.AttackHits(_state.Players, repeats)
+                    .GroupBy(entry => entry.HitIndex))
                 {
-                    if (!player.Creature.IsAlive) continue;
-                    Damage(player.Creature, raw, ValueProp.Move,
-                        enemy.Name + (repeats > 1 ? $" ({hit + 1}/{repeats})" : ""),
-                        T("Enemy attacks", "Attaques ennemies"), enemy,
-                        requireDealer: true, stopOnVictory: true);
+                    var targets = hit.Select(entry => entry.Target.Creature)
+                        .Where(creature => creature.IsAlive).ToArray();
+                    if (targets.Length == 0) continue;
+                    DamageCommand(targets, raw, ValueProp.Move,
+                        enemy.Name + (repeats > 1 ? $" ({hit.Key + 1}/{repeats})" : ""),
+                        T("Enemy attacks", "Attaques ennemies"), enemy, stopOnVictory: true);
                 }
             }
         }
+        var enemySide = _state.GetCreaturesOnSide(CombatSide.Enemy).ToArray();
+        var enemyParticipants = enemySide
+            .Where(enemy => enemy.IsAlive).ToArray();
+        var enemySet = enemyParticipants.ToHashSet();
+        foreach (var regen in _combatListeners.OfType<RegenPower>())
+            if (regen.Amount > 0 && enemySet.Contains(regen.Owner))
+                _events.Add(new(BetterSpire2.Guardian.Core.ForecastEventKind.Heal, Id(regen.Owner),
+                    Source(regen), regen.Amount,
+                    Phase: T("Enemy turn / early", "Tour ennemi / début")));
+        foreach (var doom in _combatListeners.OfType<DoomPower>())
+            if (enemySet.Contains(doom.Owner))
+                AddDoomCheck(enemySide, new[] { doom.Owner },
+                    T("Enemy turn / before end", "Tour ennemi / avant la fin"));
     }
 }

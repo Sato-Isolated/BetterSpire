@@ -14,21 +14,31 @@ public static class OverheadPresentation
     // Missing forecasts are hidden, never represented as a guessed zero or a punctuation marker.
     public const string Unavailable = "";
 
-    public static OverheadReadout Format(ActorForecast actor, bool partial)
+    public static OverheadReadout Format(ActorForecast actor, bool partial,
+        bool branchEnumerationComplete = true)
     {
         ArgumentNullException.ThrowIfNull(actor);
-        // Never recalculate StartHp - HpLost here: healing and revivals make it incorrect.
-        // HpLost is actual projected HP loss, not incoming damage or the net loss after healing.
-        string text = actor.FinalHp.ToString(CultureInfo.InvariantCulture) + " (" +
-            actor.HpLost.ToString(CultureInfo.InvariantCulture) + ")";
-        // Numbers only. Amber carries uncertainty/revival; F2 retains the full explanation.
-        // Lethal remains red even when partial, so the warning is never visually downgraded.
-        var severity = actor.FinalHp <= 0 ? OverheadSeverity.Lethal
-            : partial || actor.Revivals > 0 ? OverheadSeverity.Uncertain
+        if (!branchEnumerationComplete)
+            return new("?", OverheadSeverity.Uncertain);
+
+        string finalHp = Range(actor.MinimumFinalHp, actor.MaximumFinalHp);
+        string hpLost = Range(actor.MinimumHpLost, actor.MaximumHpLost);
+        string text = finalHp + " (" + hpLost + ")";
+        // A range is a real outcome difference and uses the same uncertainty color as partial models.
+        bool alwaysLethal = actor.MinimumFinalHp == 0 && actor.MaximumFinalHp == 0;
+        var severity = partial ? OverheadSeverity.Uncertain
+            : alwaysLethal ? OverheadSeverity.Lethal
+            : actor.HasVariableOutcome || actor.Revivals > 0 ? OverheadSeverity.Uncertain
             : actor.HpLost > 0 ? OverheadSeverity.Loss : OverheadSeverity.Normal;
         return new(text, severity);
     }
 
-    public static bool ShouldShow(ActorForecast actor, bool partial, bool onlyDanger)
-        => !onlyDanger || partial || actor.HpLost > 0 || actor.Revivals > 0 || actor.FinalHp <= 0;
+    public static bool ShouldShow(ActorForecast actor, bool partial, bool onlyDanger,
+        bool branchEnumerationComplete = true)
+        => !onlyDanger || partial || !branchEnumerationComplete || actor.MaximumHpLost > 0 ||
+            actor.Revivals > 0 || actor.MinimumFinalHp <= 0;
+
+    private static string Range(int minimum, int maximum) => minimum == maximum
+        ? minimum.ToString(CultureInfo.InvariantCulture)
+        : minimum.ToString(CultureInfo.InvariantCulture) + "–" + maximum.ToString(CultureInfo.InvariantCulture);
 }

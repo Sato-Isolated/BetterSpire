@@ -11,9 +11,8 @@ internal sealed class OverheadLabel
 {
     internal readonly Label TextNode;
     internal NCreature CreatureNode;
-    internal ActorForecast? Actor;
-    internal OverheadReadout Readout;
-    internal bool Invalidated;
+    internal readonly OverheadDisplayState Display = new();
+    internal ActorForecast? Actor => Display.Actor;
     internal int Generation;
     internal int Order;
     private string? _text;
@@ -38,19 +37,14 @@ internal sealed class OverheadLabel
         root.AddChild(TextNode);
     }
 
-    internal void Bind(NCreature node, ActorForecast? actor, bool partial, int generation, int order)
+    internal void Bind(NCreature node, ActorForecast? actor, bool partial, int generation, int order,
+        bool branchEnumerationComplete = true)
     {
         CreatureNode = node;
-        Actor = actor;
-        Readout = actor == null ? new(OverheadPresentation.Unavailable, OverheadSeverity.Uncertain)
-            : OverheadPresentation.Format(actor, partial);
-        Invalidated = false;
+        Display.Bind(actor, partial, branchEnumerationComplete);
         Generation = generation;
         Order = order;
     }
-
-    internal bool MatchesSnapshot() => Actor == null ||
-        (CreatureNode.Entity.CurrentHp == Actor.StartHp && CreatureNode.Entity.Block == Actor.StartBlock);
 
     internal void Apply(string text, OverheadSeverity severity)
     {

@@ -42,10 +42,13 @@ public sealed class JournalSource
 public sealed class ActorStats
 {
     public StatLine Totals { get; set; } = new();
+    // Conventionally apportioned damage is a subset of Totals, never an extra contribution.
+    public StatLine ConventionDamage { get; set; } = new();
     public Dictionary<string, JournalSource> Sources { get; set; } = new(StringComparer.Ordinal);
     public void Add(JournalEvent item)
     {
         Totals.Add(item.Metric, item.Amount);
+        if (item.IsConventional) ConventionDamage.Add(item.Metric, item.Amount);
         if (item.SourceId.Length == 0) return;
         // Bound source cardinality even for mods generating unlimited unique cards.
         string key = Sources.ContainsKey(item.SourceId) || Sources.Count < 256 ? item.SourceId : "other:overflow";
@@ -60,6 +63,7 @@ public sealed class ActorStats
     public void Merge(ActorStats other)
     {
         Totals.Add(other.Totals);
+        ConventionDamage.Add(other.ConventionDamage);
         foreach (var source in other.Sources.Values)
         {
             string key = Sources.ContainsKey(source.Id) || Sources.Count < 256 ? source.Id : "other:overflow";
@@ -97,6 +101,9 @@ public sealed class CombatRecord
     public CombatOutcome Outcome { get; set; }
     public bool Partial { get; set; }
     public int ReplacedAttempts { get; set; }
+    // Zero identifies legacy archives that do not distinguish direct from conventional attribution.
+    public int ConventionAttributionVersion { get; set; }
+    public List<string> PartialReasons { get; set; } = new();
     // Zero means a legacy archive with totals but no chronological trace.
     public int DamageTraceVersion { get; set; }
     public bool DamageTraceTruncated { get; set; }
@@ -119,4 +126,4 @@ public sealed class RunJournal
 }
 
 public sealed record JournalEvent(string PlayerId, int Round, JournalPhase Phase, Stat Metric,
-    long Amount, string SourceId = "", string SourceName = "", bool IsCard = false);
+    long Amount, string SourceId = "", string SourceName = "", bool IsCard = false, bool IsConventional = false);

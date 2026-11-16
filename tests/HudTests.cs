@@ -61,6 +61,7 @@ internal static class HudTests
         _checks += HudCoexistenceTests.Run();
         _checks += CompactHudTests.Run();
         _checks += HandTooltipTests.Run();
+        _checks += OverheadVisibilityTests.Run();
         Console.WriteLine($"PASS {_checks} HUD pure C# checks. Godot rendering / in-game behavior NOT tested.");
         return 0;
     }

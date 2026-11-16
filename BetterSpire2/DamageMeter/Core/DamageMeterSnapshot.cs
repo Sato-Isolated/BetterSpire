@@ -19,6 +19,8 @@ public sealed class DamageMeterSnapshot
     public decimal UnattributedDamage { get; init; }
     public bool IsPartial { get; init; }
     public bool IncludesBlock { get; init; }
+    public int? RoundNumber { get; init; }
+    public IReadOnlyList<string> PartialReasons { get; init; } = Array.Empty<string>();
     public bool IsMultiplayer => Rows.Count > 1;
 }
 
@@ -39,13 +41,31 @@ public static class DamageMeterBuilder
                 if (totals.ContainsKey(player.Key))
                     totals[player.Key] += Amount(player.Value.Totals, includeBlock);
         }
-        return FromTotals(run, totals, unknown, includeBlock);
+        bool partial = RunIsPartial(run);
+        return FromTotals(run, totals, unknown, includeBlock, partial: partial,
+            partialReasons: PartialReasons(run.Combats));
     }
     public static DamageMeterSnapshot BuildLive(JournalSession session, bool includeBlock,
         DamageMeterScope scope = DamageMeterScope.Run)
     {
         var run = session.Run;
         if (run == null) return new DamageMeterSnapshot { IncludesBlock = includeBlock, Scope = scope };
+        if (scope == DamageMeterScope.Round)
+        {
+            var combat = session.Active;
+            int round = combat?.LatestRound ?? 0;
+            var totalsForRound = run.Players.Keys.ToDictionary(id => id, _ => 0m, StringComparer.Ordinal);
+            var currentRound = combat?.Rounds.FirstOrDefault(bucket => bucket.Number == round);
+            if (currentRound != null)
+                foreach (var player in currentRound.Players)
+                    if (totalsForRound.ContainsKey(player.Key))
+                        totalsForRound[player.Key] = Amount(player.Value.Totals, includeBlock);
+            var unknownForRound = currentRound?.UnattributedDamage ?? new StatLine();
+            bool roundPartial = combat == null || combat.Partial;
+            return FromTotals(run, totalsForRound,
+                (decimal)unknownForRound[Stat.DamageDealtHp] + (includeBlock ? unknownForRound[Stat.DamageDealtBlocked] : 0),
+                includeBlock, scope, roundPartial, combat?.PartialReasons, round);
+        }
         var index = scope == DamageMeterScope.Combat ? session.CombatDamageIndex : session.DamageIndex;
         var totals = new Dictionary<string, decimal>(run.Players.Count, StringComparer.Ordinal);
         foreach (var player in run.Players.Keys)
@@ -59,13 +79,19 @@ public static class DamageMeterBuilder
             ? session.Active == null || session.Active.Partial
             : RunIsPartial(run);
         return FromTotals(run, totals, unattributed.Hp + (includeBlock ? unattributed.Blocked : 0),
-            includeBlock, scope, partial);
+            includeBlock, scope, partial,
+            scope == DamageMeterScope.Combat ? session.Active?.PartialReasons : PartialReasons(run.Combats));
     }
     private static bool RunIsPartial(RunJournal run) => run.Partial ||
         run.DamageMeterCoverageVersion < 1 || run.Combats.Any(c => c.Partial);
 
+    private static IReadOnlyList<string> PartialReasons(IEnumerable<CombatRecord> combats) =>
+        combats.Where(combat => combat.Partial).SelectMany(combat => combat.PartialReasons)
+            .Distinct(StringComparer.Ordinal).Take(16).ToArray();
+
     private static DamageMeterSnapshot FromTotals(RunJournal run, Dictionary<string, decimal> totals,
-        decimal unknown, bool includeBlock, DamageMeterScope scope = DamageMeterScope.Run, bool? partial = null)
+        decimal unknown, bool includeBlock, DamageMeterScope scope = DamageMeterScope.Run, bool? partial = null,
+        IReadOnlyList<string>? partialReasons = null, int? roundNumber = null)
     {
         // Identity, not names, distinguishes two players with identical display names.
         // Fixed identity tie-break prevents rows oscillating after unrelated journal updates.
@@ -88,7 +114,8 @@ public static class DamageMeterBuilder
         }
         return new DamageMeterSnapshot { Rows = rows, AttributedDamage = total,
             UnattributedDamage = unknown, IncludesBlock = includeBlock, Scope = scope,
-            IsPartial = partial ?? RunIsPartial(run) };
+            IsPartial = partial ?? RunIsPartial(run), PartialReasons = partialReasons?.ToArray() ?? Array.Empty<string>(),
+            RoundNumber = roundNumber };
     }
     private static decimal Amount(StatLine line, bool includeBlock) =>
         (decimal)line[Stat.DamageDealtHp] + (includeBlock ? line[Stat.DamageDealtBlocked] : 0);

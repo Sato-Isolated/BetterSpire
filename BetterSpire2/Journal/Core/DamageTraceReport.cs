@@ -20,7 +20,8 @@ internal static class DamageTraceReport
             if (selection.Scope == JournalScope.Round && e.Round != selection.Round) continue;
             if (selection.PlayerId != null && e.TargetPlayerId != selection.PlayerId && !e.Shares.Any(s => s.PlayerId == selection.PlayerId)) continue;
             found = true;
-            string source = e.Source.Length > 0 ? e.Source : T("Unspecified effect", "Effet non précisé");
+            string source = JournalReportBuilder.SourceName(e.SourceId,
+                e.Source.Length > 0 ? e.Source : T("Unspecified effect", "Effet non précisé"), french);
             string phase = e.Phase switch
             {
                 JournalPhase.Setup => T("Setup", "Préparation"), JournalPhase.Player => T("Player phase", "Phase joueur"),
@@ -36,6 +37,8 @@ internal static class DamageTraceReport
                 DamageAttributionKind.PetOwner => T("Pet damage credited to its owner once.", "Dégâts du familier crédités une fois à son propriétaire."),
                 DamageAttributionKind.CardOwner => T("Player identified from the source card, not a native dealer.", "Joueur identifié par la carte source, pas par l’auteur natif."),
                 DamageAttributionKind.PoisonConvention => T("Proportional poison-stack convention, not unique native ownership.", "Convention proportionnelle des stacks de poison, pas une propriété native unique."),
+                DamageAttributionKind.PowerApplier => T("Player identified from this power's native applier.", "Joueur identifié par l’auteur natif de cet effet."),
+                DamageAttributionKind.DoomConvention => T("Actual HP removed by Doom, split by observed stack contributions.", "PV réellement retirés par Trépas, répartis selon les contributions observées aux charges."),
                 DamageAttributionKind.Unattributed => T("No reliable player attribution.", "Aucune attribution fiable à un joueur."),
                 _ => T("Not part of outgoing enemy damage totals.", "Hors des totaux de dégâts infligés aux ennemis.")
             });

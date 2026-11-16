@@ -15,9 +15,9 @@ internal static class DamageMeterController
     {
         try
         {
-            var scope = DamageMeterContext.Select(mapVisible, inCombatRoom);
+            var scope = DamageMeterContext.Select(mapVisible, inCombatRoom, ModSettings.DamageMeterCurrentRound);
             Hud.Render(session, scope, HudVisibilityPolicy.ShowMeter(ModSettings.ShowDamageMeter,
-                activeRun, ModSettings.DamageMeterOnlyCombat, scope == DamageMeterScope.Combat, uiBlocking));
+                activeRun, ModSettings.DamageMeterOnlyCombat, scope != DamageMeterScope.Run, uiBlocking));
         }
         catch (Exception ex)
         {

@@ -43,7 +43,34 @@ internal static class OverheadTests
         finally { CultureInfo.CurrentCulture = oldCulture; }
         Equal("…", OverheadPresentation.Resolving, "pending has no stale number");
         Equal("", OverheadPresentation.Unavailable, "unavailable is hidden, not a fabricated zero");
+        PlayerTurnReadoutCases();
         LayoutCases();
+    }
+
+    private static void PlayerTurnReadoutCases()
+    {
+        var state = new OverheadDisplayState();
+        var actor = new ActorForecast("p", "Player", 72, 61, 0, 0, 0, 0, 11, 0, 0, 0, 0, null);
+        state.Bind(actor, false, true);
+        state.Invalidate();
+        Equal("61 (11)", state.Read().Text, "card resolution keeps the forecast instead of adding actual HP");
+        state.SetStatus(true);
+        Equal("61 (11)", state.Read().Text, "retry preserves the same readout format");
+        state.Bind(actor with { FinalHp = 65, HpLost = 7 }, false, true);
+        Equal("65 (7)", state.Read().Text, "completed card refresh updates the forecast");
+        var policy = typeof(OverheadPresentation).Assembly.GetType("BetterSpire2.Guardian.Core.GuardianTurnVisibility")
+            ?? throw new Exception("Missing player-turn visibility policy.");
+        bool Visible(bool starting = false, bool enemy = false, bool ending = false, bool play = true,
+            bool participant = true, bool ready = false) => (bool)policy.GetMethod("ShouldShow")!
+                .Invoke(null, new object[] { starting, enemy, ending, play, participant, ready })!;
+        Equal(true, Visible(), "player's turn is visible");
+        Equal(false, Visible(ready: true), "pressing end turn hides immediately even while teammates play");
+        Equal(false, Visible(ending: true), "end-turn effects hide the forecast");
+        Equal(false, Visible(enemy: true), "enemy actions hide the forecast");
+        Equal(false, Visible(play: false), "automatic end-turn phase hides the forecast");
+        Equal(false, Visible(participant: false), "another player's extra turn hides the local forecast");
+        Equal(false, Visible(starting: true), "combat setup has no previous-turn readout");
+        Equal(true, Visible(), "next player turn becomes visible automatically");
     }
 
     private static void LayoutCases()

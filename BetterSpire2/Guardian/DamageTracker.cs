@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using BetterSpire2.Core;
 using BetterSpire2.Guardian.Core;
 using BetterSpire2.Guardian.Game;
 using BetterSpire2.Guardian.UI;
@@ -38,6 +39,13 @@ public static class DamageTracker
         Hud.MarkStale();
     }
     public static void Recalculate() { InvalidateForecast(); ModRuntime.EnsureStarted(); }
+    internal static void RefreshPresentation()
+    {
+        if (_lastResult == null || _actorIds == null || Gate.IsDirty)
+        { Recalculate(); return; }
+        _renderPending = true;
+        ModRuntime.EnsureStarted();
+    }
     public static void OnCombatSetUp() { Hide(); ModRuntime.EnsureStarted(); }
     public static void Hide()
     {
@@ -49,7 +57,9 @@ public static class DamageTracker
     {
         if (!Hud.DetailsVisible && (!ModSettings.PlayerDamageTotal ||
             CombatManager.Instance is not { IsInProgress: true, IsOverOrEnding: false })) return;
-        Hud.ToggleDetails(); _renderPending = true; _statusRendered = false; ModRuntime.EnsureStarted();
+        Hud.ToggleDetails(); _renderPending = true; _statusRendered = false;
+        if (Hud.DetailsVisible && (_lastResult == null || Gate.IsDirty)) Hud.MarkStale();
+        ModRuntime.EnsureStarted();
     }
     public static void ChangeDetailPage(int delta) { Hud.ChangePage(delta); _renderPending = true; }
     public static void ToggleVisibility()
@@ -76,10 +86,18 @@ public static class DamageTracker
             if (!ReferenceEquals(_state, state)) { Hide(); _state = state; }
             Observer.Observe(state);
             Ledger.Update(state, local.Creature);
-            bool resolving = manager.IsStarting || manager.IsEnemyTurnStarted || manager.EndingPlayerTurnPhaseOne ||
-                manager.EndingPlayerTurnPhaseTwo || manager.PlayerActionsDisabled ||
-                !manager.IsPartOfPlayerTurn(local) || state.Players.Any(manager.IsExecutingCardOrPotionEffect) ||
-                local.PlayerCombatState?.Phase != PlayerTurnPhase.Play || manager.IsPlayerReadyToEndTurn(local);
+            bool playerTurnVisible = GuardianTurnVisibility.ShouldShow(manager.IsStarting, manager.IsEnemyTurnStarted,
+                manager.EndingPlayerTurnPhaseOne || manager.EndingPlayerTurnPhaseTwo,
+                local.PlayerCombatState?.Phase == PlayerTurnPhase.Play,
+                manager.IsPartOfPlayerTurn(local), manager.IsPlayerReadyToEndTurn(local));
+            if (!playerTurnVisible)
+            {
+                Hud.EndPlayerTurn();
+                if (!_resolving) { _resolving = true; InvalidateForecast(); }
+                _statusRendered = false;
+                return;
+            }
+            bool resolving = manager.PlayerActionsDisabled || state.Players.Any(manager.IsExecutingCardOrPotionEffect);
             if (resolving != _resolving)
             { _resolving = resolving; InvalidateForecast(); _statusRendered = false; }
             if (NCapstoneContainer.Instance?.InUse == true || NOverlayStack.Instance?.ScreenCount > 0 ||
@@ -89,9 +107,8 @@ public static class DamageTracker
             {
                 if (!_statusRendered)
                 {
-                    Hud.RenderStatus(T("Resolving…", "Résolution…"),
+                    _statusRendered = Hud.RenderStatus(T("Resolving…", "Résolution…"),
                         T("The next projection appears on your turn.", "La prévision reprend pendant ton tour."), Ledger);
-                    _statusRendered = true;
                 }
                 return;
             }
@@ -116,13 +133,11 @@ public static class DamageTracker
         }
         catch (Exception exception)
         {
-            _lastResult = null; Gate.Fail(now); _retryAfter = now + 1000; Hud.MarkStale();
+            _lastResult = null; Gate.Fail(now); _retryAfter = now + 1000;
             try
             {
-                if (!_statusRendered)
-                    Hud.RenderStatus(T("Forecast unavailable", "Prévision indisponible"),
-                        T("No safety verdict. Check the mod log.", "Aucun verdict de sécurité. Consulte le journal."), Ledger, error: true);
-                _statusRendered = true;
+                _statusRendered = Hud.RenderStatus(T("Forecast unavailable", "Prévision indisponible"),
+                    T("No safety verdict. Check the mod log.", "Aucun verdict de sécurité. Consulte le journal."), Ledger, error: true);
             }
             catch { Hud.Hide(); }
             if (_lastErrorLog == 0 || now - _lastErrorLog > 10000)
@@ -132,17 +147,26 @@ public static class DamageTracker
     }
     public static void ExportLastForecast()
     {
-        if (_lastResult == null || Gate.IsDirty) return;
+        if (_lastResult == null || Gate.IsDirty)
+        {
+            Hud.ShowExportStatus(T("No current forecast to export.", "Aucune prévision actuelle à exporter."), null, success: false);
+            return;
+        }
         try
         {
             string path = Path.Combine(OS.GetUserDataDir(), "betterspire_guardian_forecast.json");
-            var dump = new { Version = "3.6.2-v111", GameModule = typeof(CombatState).Module.ModuleVersionId,
+            var dump = new { Version = ModBuildInfo.Version, GameModule = typeof(CombatState).Module.ModuleVersionId,
                 Forecast = _lastResult, Observed = new { Ledger.PlayerHpLost, Ledger.PlayerBlocked,
                     Ledger.PlayerBlockGained, Ledger.PetHpLost, Ledger.Recent } };
             File.WriteAllText(path, JsonSerializer.Serialize(dump, new JsonSerializerOptions { WriteIndented = true }));
             ModLog.Info("Guardian export: " + path);
+            Hud.ShowExportStatus(T("Forecast exported: ", "Prévision exportée : ") + Path.GetFileName(path), path, success: true);
         }
-        catch (Exception ex) { ModLog.Error("Guardian.Export", ex); }
+        catch (Exception ex)
+        {
+            ModLog.Error("Guardian.Export", ex);
+            Hud.ShowExportStatus(T("Export failed. Check the mod log.", "Échec de l’export. Consulte le journal du mod."), null, success: false);
+        }
     }
     private static string T(string en, string fr) => ModText.IsFrench ? fr : en;
 }

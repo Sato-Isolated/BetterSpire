@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Godot;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
+using MegaCrit.Sts2.Core.Entities.FoolArrows;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Models;
 
@@ -28,7 +29,9 @@ public static partial class TeammateHandViewer
         private bool _cardsDirty = true, _potionsDirty = true, _statsDirty = true, _disposed;
         private ulong _lastError, _retryAfter, _nextSafetyRefresh;
         private string _displayName = "";
-        private (int Hp, int Max, int Block, int Energy, int Stars, int Count, bool Available)? _lastStats;
+        private (int Hp, int Max, int Block, int Energy, int Stars, int Count, bool Available,
+            int Arrows, int Away, int Destroyed, int Slots)? _lastStats;
+        private readonly List<ArrowSlot> _arrowSlots = new();
 
         private static int CardWidth => CompactHudGeometry.ScaledCardWidth(ModSettings.CardScalePercent);
         private static int PortraitHeight => CompactHudGeometry.ScaledPortraitHeight(ModSettings.CardScalePercent);
@@ -90,21 +93,24 @@ public static partial class TeammateHandViewer
             flow.AddThemeConstantOverride("v_separation", 3);
             return flow;
         }
-        internal void RefreshHandReference()
+        internal void RefreshHandReference(bool forceVisualRefresh = true)
         {
+            bool referenceChanged = false;
             var combat = _player.PlayerCombatState;
             if (!ReferenceEquals(combat, _combat) || !ReferenceEquals(_creature, _player.Creature))
             {
+                referenceChanged = true;
                 _lastStats = null;
                 UnbindStatus(); _combat = combat; _creature = _player.Creature; BindStatus();
             }
             var hand = combat?.Hand;
             if (!ReferenceEquals(hand, _hand))
             {
+                referenceChanged = true;
                 UnsubscribeHand(); UnsubscribeCardUpgrades();
                 _hand = hand; SubscribeHand();
             }
-            _cardsDirty = _statsDirty = true;
+            if (forceVisualRefresh || referenceChanged) _cardsDirty = _statsDirty = true;
         }
         internal void FlushPendingChanges()
         {
@@ -115,7 +121,8 @@ public static partial class TeammateHandViewer
             {
                 _nextSafetyRefresh = now + 2000;
                 RefreshDisplayName();
-                RefreshHandReference(); // Fallback for state replacement and unobserved cost modifiers.
+                RefreshHandReference(forceVisualRefresh: false);
+                RefreshCardCosts(); // Cheap fallback for cost modifiers without rebuilding card previews.
             }
             if (!_cardsDirty && !_potionsDirty && !_statsDirty) return;
             try
@@ -178,7 +185,20 @@ public static partial class TeammateHandViewer
                 _combat.EnergyChanged += OnValuesChanged;
                 _combat.StarsChanged += OnValuesChanged;
                 _combat.PlayerTurnPhaseChanged += OnHandChanged;
+                _combat.ArrowsChanged += OnArrowsChanged;
+                SyncArrowSlots();
             }
+        }
+        private void OnArrowStatusChanged() => _statsDirty = true;
+        private void OnArrowsChanged() { SyncArrowSlots(); _statsDirty = true; }
+        // ArrowsChanged fires only when a slot is gained; shoot/impale/retrieve update the slot itself.
+        private void SyncArrowSlots()
+        {
+            foreach (var slot in _arrowSlots) slot.ArrowStatusUpdated -= OnArrowStatusChanged;
+            _arrowSlots.Clear();
+            if (_combat == null) return;
+            _arrowSlots.AddRange(_combat.Arrows);
+            foreach (var slot in _arrowSlots) slot.ArrowStatusUpdated += OnArrowStatusChanged;
         }
         private void UnbindStatus()
         {
@@ -197,7 +217,10 @@ public static partial class TeammateHandViewer
                 _combat.EnergyChanged -= OnValuesChanged;
                 _combat.StarsChanged -= OnValuesChanged;
                 _combat.PlayerTurnPhaseChanged -= OnHandChanged;
+                _combat.ArrowsChanged -= OnArrowsChanged;
             }
+            foreach (var slot in _arrowSlots) slot.ArrowStatusUpdated -= OnArrowStatusChanged;
+            _arrowSlots.Clear();
         }
         private void ObserveCard(CardModel card, bool observe)
         {
@@ -247,10 +270,24 @@ public static partial class TeammateHandViewer
         }
         private void RefreshStatus()
         {
+            int arrows = 0, away = 0, destroyed = 0;
+            foreach (var slot in _arrowSlots)
+                switch (slot.Status)
+                {
+                    case ArrowStatus.Retrieved: arrows++; break;
+                    case ArrowStatus.Away: away++; break;
+                    default: destroyed++; break;
+                }
             var stats = (_creature?.CurrentHp ?? 0, _creature?.MaxHp ?? 0, _creature?.Block ?? 0,
-                _combat?.Energy ?? 0, _combat?.Stars ?? 0, _hand?.Cards.Count ?? 0, _hand != null);
+                _combat?.Energy ?? 0, _combat?.Stars ?? 0, _hand?.Cards.Count ?? 0, _hand != null,
+                Arrows: arrows, Away: away, Destroyed: destroyed, Slots: _arrowSlots.Count);
             if (_lastStats == stats) return;
             _lastStats = stats;
+            // Only characters with arrow slots (the Fool) show the counter; destroyed slots are gone for the combat.
+            string arrowText = stats.Slots == 0 ? "" : ModText.T("Arrows") + $" {stats.Arrows}/{stats.Slots - stats.Destroyed}";
+            string arrowDetail = arrowText.Length == 0 ? "" : " · " + arrowText
+                + (stats.Away > 0 ? $" ({stats.Away} {ModText.T("impaled")})" : "")
+                + (stats.Destroyed > 0 ? $" ({stats.Destroyed} {ModText.T("destroyed")})" : "");
             string nickname = PlayerDisplayNames.Nickname(_player);
             if (nickname.Length == 0) nickname = _player.Character?.Title?.GetFormattedText() ?? ModText.T("Player");
             _nameLabel!.Text = nickname + (stats.Item7 ? $" ({stats.Item6})" : " (—)");
@@ -259,6 +296,7 @@ public static partial class TeammateHandViewer
                 + " · " + ModText.T("Block") + (_creature == null ? " —" : $" {stats.Item3}")
                 + " · " + ModText.T("Energy") + (_combat == null ? " —" : $" {stats.Item4}")
                 + (stats.Item5 > 0 ? " · " + ModText.T("Stars") + $" {stats.Item5}" : "")
+                + arrowDetail
                 + "\n" + ModText.T("Drag name to move · Page Up / Page Down: teammate · F3: close");
             if (_statsRow == null) return;
             foreach (var child in _statsRow!.GetChildren()) { _statsRow.RemoveChild(child); child.QueueFree(); }
@@ -267,12 +305,16 @@ public static partial class TeammateHandViewer
             AddStat(ModText.T("Block") + (_creature == null ? " —" : $" {stats.Item3}"), HudTheme.Info);
             AddStat(ModText.T("Energy") + " " + (_combat == null ? "—" : stats.Item4.ToString()), HudTheme.Accent);
             if (stats.Item5 > 0) AddStat(ModText.T("Stars") + $" {stats.Item5}", HudTheme.Accent);
+            if (arrowText.Length > 0)
+                AddStat(arrowText, stats.Arrows > 0 ? HudTheme.Accent : HudTheme.Muted).TooltipText =
+                    arrowDetail.TrimStart(' ', '·');
         }
-        private void AddStat(string text, Color color)
+        private Label AddStat(string text, Color color)
         {
             var label = UiHelpers.CreateLabel(text, color, 11);
             HudTheme.Outline(label);
             _statsRow!.AddChild(label);
+            return label;
         }
         private void RefreshPotions()
         {

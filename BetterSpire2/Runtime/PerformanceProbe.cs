@@ -3,6 +3,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
+using BetterSpire2.Core;
 using Godot;
 using MegaCrit.Sts2.Core.Nodes;
 
@@ -90,7 +91,7 @@ internal static class PerformanceProbe
             var gcCollections = new int[3];
             for (int i = 0; i < 3; i++) gcCollections[i] = (_enabled ? GC.CollectionCount(i) : _gcEnd[i]) - _gcStart[i];
             string path = Path.Combine(OS.GetUserDataDir(), "betterspire_performance.json");
-            var report = new { Version = "3.6.2-v111", StartedUtc = _startedUtc,
+            var report = new { Version = ModBuildInfo.Version, StartedUtc = _startedUtc,
                 Recording = _enabled, FrameCount = _frames,
                 MeanFrameMs = _frames == 0 ? 0 : Milliseconds(_frameTicks) / _frames,
                 MeanFps = _frameTicks == 0 ? 0 : _frames * (double)Stopwatch.Frequency / _frameTicks,

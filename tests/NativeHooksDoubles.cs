@@ -28,14 +28,45 @@ namespace MegaCrit.Sts2.Core.Combat
     public readonly record struct CombatId(int Id);
     public enum CombatSide { Player, Enemy }
     public interface ICombatState { }
-    public sealed class CombatState : ICombatState { }
+    public sealed class CombatState : ICombatState
+    {
+        public List<AbstractModel> NativeListeners { get; } = new();
+        public IEnumerable<AbstractModel> IterateHookListeners() =>
+            NativeListeners.Concat(MegaCrit.Sts2.Core.Modding.ModHelper.Provide(this));
+    }
     public sealed class CombatManager
     {
         public static CombatManager Instance { get; set; } = new();
         public CombatId? CurrentCombatId { get; set; }
         public bool IsStarting { get; set; }
         public bool IsInProgress { get; set; }
-        public bool IsOverOrEnding { get; set; }
+        public int PrimaryEnemiesAlive { get; set; } = 1;
+        public int EndingReads, ReentrantEndingReads;
+        private bool _checkingEnding;
+        public bool IsOverOrEnding
+        {
+            get
+            {
+                EndingReads++;
+                if (!IsInProgress) return true;
+                if (PrimaryEnemiesAlive > 0) return false;
+                // v111 IsCombatEnding calls ShouldStopCombatFromEnding, which
+                // enumerates mod providers. Bound recursion so regressions fail
+                // an assertion instead of overflowing the test process's stack.
+                if (_checkingEnding)
+                {
+                    ReentrantEndingReads++;
+                    throw new InvalidOperationException("Recursive native combat-ending query");
+                }
+                _checkingEnding = true;
+                try
+                {
+                    return !BetterSpire2.Runtime.CombatLifecycle.CurrentState!.IterateHookListeners()
+                        .Any(model => model.ShouldStopCombatFromEnding());
+                }
+                finally { _checkingEnding = false; }
+            }
+        }
     }
 }
 namespace BetterSpire2.Runtime
@@ -56,6 +87,7 @@ namespace MegaCrit.Sts2.Core.Models
         public void AssertMutable() { if (!IsMutable) throw new InvalidOperationException("Canonical model"); }
         public AbstractModel MutableClone() { var m = (AbstractModel)MemberwiseClone(); m.IsMutable = true; m.AfterCloned(); return m; }
         protected virtual void AfterCloned() { }
+        public virtual bool ShouldStopCombatFromEnding() => false;
         public virtual Task AfterCombatVictory(object room) => Task.CompletedTask;
     public virtual Task BeforeAttack(AttackCommand command) => Task.CompletedTask;
     public virtual Task AfterAttack(PlayerChoiceContext choiceContext, AttackCommand command) => Task.CompletedTask;

@@ -56,7 +56,7 @@ internal static class NGame_Input_Patch
         {
             switch (key.Keycode)
             {
-                case Key.F2: DamageTracker.ExportLastForecast(); return true;
+                case Key.F8: DamageTracker.ExportLastForecast(); return true;
                 case Key.F5: JournalController.ExportJournal(); return true;
                 case Key.F7: PerformanceProbe.Export(); return true;
                 default: return false;
@@ -65,7 +65,7 @@ internal static class NGame_Input_Patch
         switch (key.Keycode)
         {
             case Key.F1: SettingsMenu.Toggle(); return true;
-            case Key.F2:
+            case Key.F8:
                 if (ModSettings.PlayerDamageTotal) { JournalController.Hide(); DamageTracker.ToggleDetails(); }
                 return true;
             case Key.F3: TeammateHandViewer.Toggle(); return true;

@@ -34,7 +34,11 @@ internal static class DamageMeterTests
     private static void CombatScopeTests()
     {
         Check(DamageMeterContext.Select(false, true) == DamageMeterScope.Combat, "fight selects combat");
+        Check(DamageMeterContext.Select(false, true, showCurrentRound: true) == DamageMeterScope.Round,
+            "optional current-round mode selects the native round in combat");
         Check(DamageMeterContext.Select(true, true) == DamageMeterScope.Run, "map during fight takes priority");
+        Check(DamageMeterContext.Select(true, true, showCurrentRound: true) == DamageMeterScope.Run,
+            "map keeps the run total when current-round mode is enabled");
         Check(DamageMeterContext.Select(true, false) == DamageMeterScope.Run, "map between fights selects run");
         Check(DamageMeterContext.Select(false, false) == DamageMeterScope.Run, "outside combat keeps run");
         var s = Make(2);
@@ -42,24 +46,28 @@ internal static class DamageMeterTests
         Add(s, "p1", 10, 2, round: 0); // Setup belongs to this fight, not a separate running total.
         Add(s, "p2", 20, 3, round: 1);
         s.ObserveRound(2); Add(s, "p1", 30, 4, round: 2);
-        Equal(60, Live(s, DamageMeterScope.Combat).AttributedDamage, "next round never resets fight damage");
-        Equal(69, Live(s, DamageMeterScope.Combat, true).AttributedDamage, "fight block optional");
+        s.Append(new JournalEvent("p2", 2, JournalPhase.Enemy, Stat.DamageDealtHp, 6));
+        Equal(36, Live(s, DamageMeterScope.Round).AttributedDamage,
+            "current round includes player and enemy phases at the native round number");
+        Equal(75, Live(s, DamageMeterScope.Combat, true).AttributedDamage, "round selection does not reset combat scope");
+        Equal(66, Live(s, DamageMeterScope.Combat).AttributedDamage, "next round never resets fight damage");
+        Equal(40, Live(s, DamageMeterScope.Round, true).AttributedDamage, "current-round block mode includes round block only");
         s.AppendUnattributed(2, Stat.DamageDealtHp, 9);
         s.AppendUnattributed(2, Stat.DamageDealtBlocked, 3);
         Equal(9, Live(s, DamageMeterScope.Combat).UnattributedDamage, "unattributed fight scoped");
         Equal(12, Live(s, DamageMeterScope.Combat, true).UnattributedDamage, "unattributed fight block optional");
         s.Complete(CombatOutcome.Won);
-        Equal(60, Live(s, DamageMeterScope.Combat).AttributedDamage, "victory keeps completed fight until leaving room");
+        Equal(66, Live(s, DamageMeterScope.Combat).AttributedDamage, "victory keeps completed fight until leaving room");
         s.BeginCombat("c2", "Next", 1, 2, false);
         Equal(0, Live(s, DamageMeterScope.Combat).AttributedDamage, "second fight starts at zero");
-        Equal(60, Live(s, DamageMeterScope.Run).AttributedDamage, "reset never clears the run");
+        Equal(66, Live(s, DamageMeterScope.Run).AttributedDamage, "reset never clears the run");
         Equal(0, Live(s, DamageMeterScope.Combat).UnattributedDamage, "unknown fight total also resets");
         Equal(9, Live(s, DamageMeterScope.Run).UnattributedDamage, "unknown run total retained");
         Add(s, "p2", 100, 11); s.AppendUnattributed(1, Stat.DamageDealtHp, 7);
         long revision = s.Revision;
         for (int i = 0; i < 100; i++)
         {
-            Equal(160, Live(s, DamageMeterContext.Select(true, true)).AttributedDamage, "map shows cumulative damage");
+            Equal(166, Live(s, DamageMeterContext.Select(true, true)).AttributedDamage, "map shows cumulative damage");
             Equal(100, Live(s, DamageMeterContext.Select(false, true)).AttributedDamage, "return to fight restores its total");
         }
         Equal(revision, s.Revision, "map and HUD never mutate counters");
@@ -67,19 +75,19 @@ internal static class DamageMeterTests
         Equal(1000, combat.Rows.Single(p => p.Id == "p2").ShareTenths, "shares use current fight denominator");
         Equal(0, combat.Rows.Single(p => p.Id == "p1").Damage, "inactive player stays visible at zero in fight");
         s.Complete(CombatOutcome.Won); s.DetachCombat();
-        Equal(160, Live(s, DamageMeterScope.Run).AttributedDamage, "leaving room retains run");
+        Equal(166, Live(s, DamageMeterScope.Run).AttributedDamage, "leaving room retains run");
         Equal(0, Live(s, DamageMeterScope.Combat).AttributedDamage, "detached fight cannot leak stale combat damage");
         s.BeginCombat("c2", "Next", 1, 2, false); Add(s, "p1", 5);
         Equal(5, Live(s, DamageMeterScope.Combat).AttributedDamage, "replayed fight replaces attempt");
-        Equal(65, Live(s, DamageMeterScope.Run).AttributedDamage, "replay not counted twice in run");
+        Equal(71, Live(s, DamageMeterScope.Run).AttributedDamage, "replay not counted twice in run");
         Equal(9, Live(s, DamageMeterScope.Run).UnattributedDamage, "replay removes old unattributed attempt");
         var resumed = new JournalSession();
         resumed.Attach(JsonSerializer.Deserialize<RunJournal>(JsonSerializer.Serialize(s.Run))!);
-        Equal(65, Live(resumed, DamageMeterScope.Run).AttributedDamage, "archive restores full run");
+        Equal(71, Live(resumed, DamageMeterScope.Run).AttributedDamage, "archive restores full run");
         Equal(0, Live(resumed, DamageMeterScope.Combat).AttributedDamage, "archive does not attach old combat automatically");
         resumed.BeginCombat("c2", "Next", 1, 2, true); Add(resumed, "p2", 12);
         Equal(12, Live(resumed, DamageMeterScope.Combat).AttributedDamage, "resumed fight rebuilt once");
-        Equal(72, Live(resumed, DamageMeterScope.Run).AttributedDamage, "resumed fight replaces old attempt");
+        Equal(78, Live(resumed, DamageMeterScope.Run).AttributedDamage, "resumed fight replaces old attempt");
         Check(Live(resumed, DamageMeterScope.Combat).IsPartial, "resumed partial capture is explicit");
         resumed.BeginCombat("c3", "Third", 1, 3, false);
         Check(!Live(resumed, DamageMeterScope.Combat).IsPartial, "old partial fight does not contaminate new fight coverage");
@@ -87,6 +95,17 @@ internal static class DamageMeterTests
         resumed.Attach(new RunJournal { Key = "fresh", DamageMeterCoverageVersion = 1 });
         Equal(0, Live(resumed, DamageMeterScope.Run).AttributedDamage, "new run clears all damage");
         Equal(0, Live(resumed, DamageMeterScope.Combat).AttributedDamage, "new run clears fight index too");
+
+        var coverage = Make();
+        coverage.MarkPartial("damage.results");
+        Check(Live(coverage, DamageMeterScope.Round).PartialReasons.SequenceEqual(new[] { "damage.results" }),
+            "round meter explains missing observations in its active combat");
+        coverage.Complete(CombatOutcome.Won);
+        coverage.BeginCombat("c2", "Next", 1, 2, false);
+        Check(!Live(coverage, DamageMeterScope.Combat).IsPartial && Live(coverage, DamageMeterScope.Combat).PartialReasons.Count == 0,
+            "a previous combat gap does not mark the current fight partial");
+        Check(Live(coverage, DamageMeterScope.Run).PartialReasons.SequenceEqual(new[] { "damage.results" }),
+            "run meter retains previous combat observation reasons");
     }
 
     private static void PlayerNameTests()

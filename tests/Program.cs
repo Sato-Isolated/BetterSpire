@@ -61,6 +61,10 @@ internal static class Program
         catch (Exception ex) { failed++; Console.WriteLine("FAIL overhead: " + ex.Message); }
         try { OstyRegressionTests.Run(); passed++; Console.WriteLine("PASS Osty receiver-scoped reactions and forecast phase policy"); }
         catch (Exception ex) { failed++; Console.WriteLine("FAIL Osty regression: " + ex.Message); }
+        try { WuppyRegressionTests.Run(); passed++; Console.WriteLine("PASS Wuppy pre-block redirection"); }
+        catch (Exception ex) { failed++; Console.WriteLine("FAIL Wuppy regression: " + ex.Message); }
+        try { ForecastReactionTests.Run(); passed++; Console.WriteLine("PASS forecast reactions, branching and Doom phases"); }
+        catch (Exception ex) { failed++; Console.WriteLine("FAIL forecast reactions: " + ex.Message); }
         Console.WriteLine($"{passed} groups passed, {failed} failed.");
         return failed == 0 ? 0 : 1;
     }
@@ -101,6 +105,10 @@ internal static class Program
         }
         MustThrow(new(Array.Empty<ActorSnapshot>(), Array.Empty<ForecastEvent>(), Array.Empty<string>(), "p"));
         MustThrow(new(new[] { p, p }, Array.Empty<ForecastEvent>(), Array.Empty<string>(), "p"));
+        MustThrow(new(new[] { p with { RedirectPoweredAttacksBeforeBlockTo = "missing" } },
+            Array.Empty<ForecastEvent>(), Array.Empty<string>(), "p"));
+        MustThrow(new(new[] { p with { RedirectPoweredAttacksBeforeBlockTo = "p" } },
+            Array.Empty<ForecastEvent>(), Array.Empty<string>(), "p"));
         MustThrow(new(new[] { p }, new[] { new ForecastEvent(ForecastEventKind.Damage, "missing", "A", 1) }, Array.Empty<string>(), "p"));
         MustThrow(new(new[] { p }, Enumerable.Repeat(new ForecastEvent(ForecastEventKind.Damage, "p", "A", 1), 20001).ToArray(), Array.Empty<string>(), "p"));
     }

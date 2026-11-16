@@ -39,15 +39,21 @@ public sealed class JournalSession
         if (Active?.Outcome == CombatOutcome.InProgress) Active.Outcome = CombatOutcome.Interrupted;
         int existing = Run.Combats.FindIndex(c => c.Key == key);
         int attempts = existing < 0 ? 0 : Run.Combats[existing].ReplacedAttempts + 1;
+        bool historyChanged = false;
         // A restored save replaces its old branch. Never add a replay to the old attempt's total.
-        if (existing >= 0) Run.Combats.RemoveRange(existing, Run.Combats.Count - existing);
-        else Run.Combats.RemoveAll(c => c.Floor > floor);
+        if (existing >= 0)
+        {
+            Run.Combats.RemoveRange(existing, Run.Combats.Count - existing);
+            historyChanged = true;
+        }
+        else if (Run.Combats.RemoveAll(c => c.Floor > floor) > 0)
+            historyChanged = true;
         Active = new CombatRecord { Key = key, Encounter = encounter, Act = act, Floor = floor,
-            Partial = partial, ReplacedAttempts = attempts, DamageTraceVersion = 1 };
+            Partial = partial, ReplacedAttempts = attempts, DamageTraceVersion = 1, ConventionAttributionVersion = 1 };
         Run.Combats.Add(Active);
         _roundIndex.Clear(); CombatDamageIndex.Clear();
-        if (Run.Combats.Count > 512) { Run.Combats.RemoveAt(0); Run.Partial = true; }
-        DamageIndex.Rebuild(Run); // Load/replay boundaries only, never each HUD refresh.
+        if (Run.Combats.Count > 512) { Run.Combats.RemoveAt(0); Run.Partial = true; historyChanged = true; }
+        if (historyChanged) DamageIndex.Rebuild(Run); // Rebuild only when earlier history changed.
         _trace.Reset(Run);
         Revision++; DamageRevision++;
         return Active;
@@ -125,11 +131,24 @@ public sealed class JournalSession
         }
         return result;
     }
-    public void MarkPartial()
+    public void MarkPartial() => MarkPartial(null);
+    public void MarkPartial(string? reason)
     {
-        if (Active == null || Active.Partial) return;
-        Active.Partial = true;
-        Revision++; DamageRevision++;
+        if (Active == null) return;
+        bool changed = false;
+        if (!Active.Partial) { Active.Partial = true; changed = true; }
+        if (!string.IsNullOrWhiteSpace(reason))
+        {
+            string normalized = reason.Trim();
+            if (normalized.Length > 128) normalized = normalized[..128];
+            if (Active.PartialReasons.Count < 16 &&
+                !Active.PartialReasons.Contains(normalized, StringComparer.Ordinal))
+            {
+                Active.PartialReasons.Add(normalized);
+                changed = true;
+            }
+        }
+        if (changed) { Revision++; DamageRevision++; }
     }
     public void Complete(CombatOutcome outcome)
     {

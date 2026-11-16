@@ -36,7 +36,7 @@ internal static class NativeHooksTests
     {
         try
         {
-            var manager = CombatManager.Instance = new() { CurrentCombatId = new(1), IsStarting = true, IsOverOrEnding = true };
+            var manager = CombatManager.Instance = new() { CurrentCombatId = new(1), IsStarting = true };
             var state = CombatLifecycle.CurrentState = new CombatState();
             NativeCombatHooks.Start(); NativeCombatHooks.Start();
             Check(ModHelper.Registrations == 1, "one process-wide combat subscription");
@@ -58,7 +58,7 @@ internal static class NativeHooksTests
             Check(calls == 1, "thirteen thousand notifications coalesced into one flush");
             NativeCombatHooks.FlushPending();
             Check(calls == 1, "no repeated notification while clean");
-            manager.IsStarting = false; manager.IsOverOrEnding = false; manager.IsInProgress = true;
+            manager.IsStarting = false; manager.IsInProgress = true;
             var command = new AttackCommand { Sentinel = 42 };
             var ctx = new MegaCrit.Sts2.Core.GameActions.Multiplayer.PlayerChoiceContext();
             ctx.Models.Add(ModelDb.Canonical);
@@ -67,6 +67,34 @@ internal static class NativeHooksTests
                 "attack and native choice-context stack untouched");
             NativeCombatHooks.FlushPending();
             Check(calls == 2, "normal combat hook invalidation");
+
+            // The final primary enemy dying changes IsOverOrEnding from a cheap
+            // flag read into a native hook enumeration. Test that actual boundary.
+            manager.PrimaryEnemiesAlive = 0;
+            Check(manager.IsOverOrEnding, "last enemy allows the native victory decision");
+            Check(manager.ReentrantEndingReads == 0 && ModLog.Errors == 0,
+                "last kill never recursively re-enters native combat-ending query");
+            int endingReads = manager.EndingReads;
+            Check(ReferenceEquals(observer, Observer(state)) && observer.ShouldReceiveCombatHooks,
+                "provider and eligibility stay safe during native victory hook enumeration");
+            FireAll(observer);
+            Check(manager.EndingReads == endingReads,
+                "provider, eligibility and notifications never evaluate victory hooks");
+            NativeCombatHooks.FlushPending();
+            Check(calls == 2 && !observer.Pending && ReferenceEquals(observer, Observer(state)),
+                "heartbeat drops final-kill notifications without replacing the observer");
+
+            var veto = new CombatEndVeto(); state.NativeListeners.Add(veto);
+            Check(!manager.IsOverOrEnding, "native death/spawn reaction can prevent victory");
+            FireAll(observer); NativeCombatHooks.FlushPending();
+            Check(calls == 3, "observations resume while a native reaction keeps combat alive");
+            state.NativeListeners.Remove(veto);
+            NativeCombatHooks.ForgetCombat();
+            Check(manager.IsOverOrEnding && manager.ReentrantEndingReads == 0,
+                "first provider lookup after a last kill also avoids recursion");
+            observer = Observer(state);
+            Check(!observer.ShouldStopCombatFromEnding(), "observer never vetoes native victory");
+            manager.PrimaryEnemiesAlive = 1;
 
             // Both native history and hooks can request reads: the real production cursor
             // visits the same native-like result just once, never once per notification.
@@ -95,9 +123,9 @@ internal static class NativeHooksTests
             FireAll(observer); NativeCombatHooks.FlushPending(); Check(calls == before, "late old coroutine cannot affect new combat");
             FireAll(next); NativeCombatHooks.FlushPending(); Check(calls == before + 1, "new combat observed");
             before = calls;
-            manager.IsOverOrEnding = true; FireAll(next); NativeCombatHooks.FlushPending();
-            Check(calls == before && !ModHelper.Provide(state).Any(), "ending notifications ignored; early history fences retained");
-            manager.IsOverOrEnding = false;
+            manager.PrimaryEnemiesAlive = 0; FireAll(next); NativeCombatHooks.FlushPending();
+            Check(calls == before && ReferenceEquals(next, Observer(state)), "ending notifications ignored; native provider remains safe to enumerate");
+            manager.PrimaryEnemiesAlive = 1;
             next = Observer(state); FireAll(next);
             NativeCombatHooks.Stop(); NativeCombatHooks.FlushPending();
             Check(!ModHelper.Provide(state).Any() && calls == before, "stop drops queued notification and disables retained provider");
@@ -137,5 +165,11 @@ internal static class NativeHooksTests
         }
         catch (Exception ex) { Console.WriteLine("FAIL " + ex); return 1; }
         finally { NativeCombatHooks.Stop(); }
+    }
+
+    private sealed class CombatEndVeto : AbstractModel
+    {
+        public override bool ShouldReceiveCombatHooks => true;
+        public override bool ShouldStopCombatFromEnding() => true;
     }
 }

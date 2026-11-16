@@ -13,6 +13,7 @@ using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Combat.History;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models.Powers;
+using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Nodes.Screens.Capstones;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
@@ -43,6 +44,8 @@ internal static class JournalService
     private static bool IsCurrentObservation => _state != null && _manager != null &&
         ReferenceEquals(_manager, CombatManager.Instance) && _manager.CurrentCombatId == _combatId;
     private static bool _booted, _dirty, _sealed, _inTick;
+    private static int _nativeCommands;
+    private static bool _sealPending;
     private static CombatOutcome _pendingOutcome = CombatOutcome.Interrupted;
     private static long _savedRevision = -1;
     private static ulong _lastSave, _lastError;
@@ -104,6 +107,7 @@ internal static class JournalService
             name = state.Encounter?.Id.Entry ?? T("Unknown encounter", "Rencontre inconnue");
         Session.BeginCombat(key, name, state.RunState.CurrentActIndex + 1, state.RunState.TotalFloor,
             partial: state.RoundNumber > 1 || manager.IsStarting == false);
+        DamageObservationCoverage.Apply(Session);
         Session.ObserveRound(state.RoundNumber);
         _history.Changed += OnHistoryChanged;
         NativeCombatHooks.StateChanged += OnNativeStateChanged;
@@ -115,8 +119,8 @@ internal static class JournalService
     }
     private static void OnNativeStateChanged(CombatState state)
     {
-        // Hooks only schedule a history read. Never append statistics here: the native
-        // history cursor remains the single accounting path, even when F6 is hidden.
+        // Notification hooks only schedule a history read. Completed-result observers
+        // and history both use Reader.RecordDamage; UI visibility never gates collection.
         if (ReferenceEquals(_state, state)) OnHistoryChanged();
     }
     private static void OnHistoryChanged() { if (IsCurrentObservation && !_sealed) _dirty = true; }
@@ -141,10 +145,13 @@ internal static class JournalService
         if (!IsCurrentObservation || !ReferenceEquals(_history, history)) return;
         // In the supplied DLL History.Clear happens BEFORE CombatWon/CombatEnded.
         Seal();
+        Reader.HistoryCleared();
     }
     private static void Seal()
     {
         Drain();
+        if (_nativeCommands > 0) { _sealPending = true; return; }
+        _sealPending = false;
         _sealed = true;
         Session.Complete(_pendingOutcome);
         Save(true);
@@ -152,6 +159,11 @@ internal static class JournalService
     internal static void BeforeReset()
     {
         if (_state == null) return;
+        if (_nativeCommands > 0)
+        {
+            Session.MarkPartial("damage.interrupted");
+            _nativeCommands = 0;
+        }
         Seal(); Detach(); Window.Close();
     }
     internal static void OnRunCleanup()
@@ -169,6 +181,7 @@ internal static class JournalService
         if (_manager != null)
         { _manager.TurnStarted -= OnTurnStarted; _manager.CombatWon -= OnWon; _manager.CombatEnded -= OnEnded; }
         _history = null; _manager = null; _state = null; _combatId = null; _room = null; _dirty = false;
+        _nativeCommands = 0; _sealPending = false;
         Reader.Reset(); Session.DetachCombat();
     }
     private static void Drain()
@@ -179,6 +192,32 @@ internal static class JournalService
     }
     internal static bool Observes(CombatHistory history) => !_sealed && IsCurrentObservation &&
         ReferenceEquals(_history, history) && Session.Active?.Outcome == CombatOutcome.InProgress;
+    internal static NativeDamageContext? BeginNativeDamage()
+    {
+        if (_sealed || !IsCurrentObservation || Session.Active is not { Outcome: CombatOutcome.InProgress } combat)
+            return null;
+        _nativeCommands++;
+        return new(combat);
+    }
+    internal static void EndNativeDamage(NativeDamageContext context)
+    {
+        if (!ReferenceEquals(Session.Active, context.Combat) || _nativeCommands <= 0) return;
+        _nativeCommands--;
+        if (_nativeCommands == 0 && _sealPending) Seal();
+    }
+    internal static void RecordNativeDamage(NativeDamageContext context, DamageResult result,
+        Creature? dealer, CardModel? card, EffectDamageCredit? credit)
+    {
+        if (_sealed || !IsCurrentObservation || !ReferenceEquals(Session.Active, context.Combat) ||
+            !ReferenceEquals(result.Receiver.CombatState, _state) || context.Combat.Outcome != CombatOutcome.InProgress) return;
+        Drain();
+        // Match CombatHistory's timestamp at the result, even if an asynchronous
+        // command started in an earlier phase of this same combat.
+        int round = Math.Max(0, _state!.RoundNumber);
+        var phase = round == 0 ? JournalPhase.Setup :
+            _state.CurrentSide == CombatSide.Player ? JournalPhase.Player : JournalPhase.Enemy;
+        Reader.RecordDamage(Session, round, phase, result.Receiver, dealer, result, card, credit);
+    }
     internal static PoisonDamageCredit? CapturePoison(PoisonPower poison)
     {
         if (_sealed || !IsCurrentObservation || !ReferenceEquals(poison.Owner.CombatState, _state) ||
@@ -191,6 +230,30 @@ internal static class JournalService
     {
         if (!IsCurrentObservation || !ReferenceEquals(poison.Owner.CombatState, _state)) return;
         Drain(); Reader.ForgetPoison(poison);
+    }
+    internal static CombatRecord? CaptureEffectCombat(Creature target) =>
+        !_sealed && IsCurrentObservation && target.Side == CombatSide.Enemy &&
+        ReferenceEquals(target.CombatState, _state) && Session.Active?.Outcome == CombatOutcome.InProgress
+            ? Session.Active : null;
+    internal static PoisonDamageCredit? CaptureDoom(DoomPower doom)
+    {
+        if (CaptureEffectCombat(doom.Owner) == null) return null;
+        Drain();
+        return Reader.CaptureDoom(doom);
+    }
+    internal static void ForgetDoom(DoomPower doom)
+    {
+        if (!IsCurrentObservation || !ReferenceEquals(doom.Owner.CombatState, _state)) return;
+        Drain(); Reader.ForgetDoom(doom);
+    }
+    internal static void RecordEffectDamage(Creature receiver, DamageResult result,
+        CombatRecord combat, EffectDamageCredit credit)
+    {
+        if (!ReferenceEquals(CaptureEffectCombat(receiver), combat)) return;
+        Drain(); // Preserve the order of power applications and earlier damage.
+        int round = Math.Max(0, _state!.RoundNumber);
+        var phase = round == 0 ? JournalPhase.Setup : _state.CurrentSide == CombatSide.Player ? JournalPhase.Player : JournalPhase.Enemy;
+        Reader.RecordDamage(Session, round, phase, receiver, null, result, null, credit);
     }
     internal static bool CanTrack(Creature? creature) => !_sealed && IsCurrentObservation &&
         creature != null && ReferenceEquals(creature.CombatState, _state) && HistoryReader.PlayerId(creature) != null;

@@ -4,6 +4,7 @@ using System.Linq;
 using BetterSpire2.Guardian.Core;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Hooks;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Powers;
@@ -30,7 +31,7 @@ internal sealed partial class GameForecastAdapter
         var orichalcum = _combatListeners.OfType<RelicModel>()
             .Where(r => (r is Orichalcum || r is FakeOrichalcum) && participants.Contains(r.Owner.Creature) && r.Owner.Creature.Block <= 0)
             .ToHashSet();
-        // v0.111 runs both effects in BeforeSideTurnEndEarly, before relics and hand effects.
+        // v0.113 runs both effects in BeforeSideTurnEndEarly, before relics and hand effects.
         foreach (var model in _combatListeners)
         {
             switch (model)
@@ -60,6 +61,13 @@ internal sealed partial class GameForecastAdapter
                         entry.CardPlay.Card.Type == CardType.Attack);
                     if (!attacked) RelicBlock(relic, 1, before);
                     break;
+                case ObsidianVice:
+                    // v0.113: one Unpowered hit of Damage x hand size on a random hittable enemy.
+                    int handSize = relic.Owner.PlayerCombatState?.Hand.Cards.Count ?? 0;
+                    if (handSize > 0)
+                        RandomTargetDamage(relic.Owner.Creature, relic.DynamicVars.Damage.BaseValue * handSize, 1,
+                            Source(relic), before);
+                    break;
             }
         }
         // Per-player DoTurnEnd: orbs -> ethereal exhaustion -> the snapshotted hand effects.
@@ -70,7 +78,15 @@ internal sealed partial class GameForecastAdapter
             if (combat.OrbQueue != null)
                 foreach (var orb in combat.OrbQueue.Orbs)
                 {
-                    if (orb is FrostOrb frost)
+                    if (orb is LightningOrb lightning)
+                    {
+                        int count = Hook.ModifyOrbPassiveTriggerCount(_state, lightning, 1, out _);
+                        if (count < 0 || count > 1000)
+                            throw new InvalidOperationException("Invalid orb trigger count.");
+                        RandomTargetDamage(player.Creature, lightning.PassiveVal, count,
+                            Source(lightning) + T(" / passive", " / passif"), T("End turn / orbs", "Fin de tour / orbes"));
+                    }
+                    else if (orb is FrostOrb frost)
                     {
                         int count = Hook.ModifyOrbPassiveTriggerCount(_state, orb, 1, out _);
                         if (count < 0 || count > 1000) throw new InvalidOperationException("Invalid orb trigger count.");
@@ -151,11 +167,38 @@ internal sealed partial class GameForecastAdapter
                     Damage(power.Owner, power.Amount, ValueProp.Unpowered | ValueProp.Unblockable,
                         Source(power), after);
                     break;
+                case DoomPower doom:
+                    AddDoomCheck(_state.GetCreaturesOnSide(CombatSide.Player),
+                        new[] { doom.Owner }, after);
+                    break;
             }
         }
         foreach (var model in _combatListeners)
+        {
             if (model is DisintegrationPower power && participants.Contains(power.Owner))
                 Damage(power.Owner, power.Amount, ValueProp.Unpowered, Source(power),
                     T("End turn / late", "Fin de tour / tardif"), power.Owner);
+            // v0.113 Dread curse: dealer-less self-damage from its turn-refreshed DamageVar.
+            else if (model is InsatiableDominionPower dominion && participants.Contains(dominion.Owner))
+                Damage(dominion.Owner, dominion.DynamicVars.Damage.BaseValue, dominion.DynamicVars.Damage.Props,
+                    Source(dominion), T("End turn / late", "Fin de tour / tardif"));
+        }
+    }
+
+    private void RandomTargetDamage(Creature owner, decimal raw, int triggerCount, string source, string phase)
+    {
+        if (triggerCount <= 0 || !_ids.ContainsKey(owner)) return;
+        var targets = _state.GetOpponentsOf(owner).Where(target => target.IsHittable && _ids.ContainsKey(target)).ToArray();
+        if (targets.Length == 0) return;
+        for (int i = 0; i < triggerCount; i++)
+        {
+            var options = targets.Select(target => CaptureTargetDamage(target, owner, raw,
+                ValueProp.Unpowered, null)).ToArray();
+            if (options.Length == 0) break;
+            _events.Add(new ForecastEvent(ForecastEventKind.RandomTargetDamage,
+                options[0].Target, source, raw,
+                Attacker: Id(owner), RequireLivingAttacker: true, Phase: phase,
+                StopWhenNoEnemies: true, TargetOptions: options));
+        }
     }
 }

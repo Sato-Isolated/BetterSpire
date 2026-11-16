@@ -28,19 +28,51 @@ public static partial class TeammateHandViewer
         private static CardVisual ReadVisual(CardModel card)
         {
             string name = card.Title;
-            var energy = card.EnergyCost;
-            // Display costs preserve the negative sentinel; GetResolved clamps it to zero.
-            int resolved = energy.GetWithModifiers(CostModifiers.All);
-            string cost = energy.CostsX ? "X" : resolved < 0 ? "—" : resolved.ToString();
-            int stars = card.GetStarCostWithModifiers();
-            if (card.HasStarCostX || stars > 0) cost += " · " + (card.HasStarCostX ? "X" : stars.ToString()) + " ★";
             Color color = card.Type switch
             {
                 CardType.Attack => AttackColor, CardType.Skill => SkillColor,
                 CardType.Power => PowerColor, CardType.Status => StatusColor, CardType.Curse => CurseColor,
                 _ => DefaultCardColor
             };
-            return new CardVisual(name, cost, ResolveDescription(card), card.Portrait, color, ModSettings.CardScalePercent);
+            return new CardVisual(name, ReadCost(card), ResolveDescription(card), card.Portrait, color, ModSettings.CardScalePercent);
+        }
+
+        private static string ReadCost(CardModel card)
+        {
+            var energy = card.EnergyCost;
+            // Display costs preserve the negative sentinel; GetResolved clamps it to zero.
+            int resolved = energy.GetWithModifiers(CostModifiers.All);
+            string cost = energy.CostsX ? "X" : resolved < 0 ? "—" : resolved.ToString();
+            int stars = card.GetStarCostWithModifiers();
+            if (card.HasStarCostX || stars > 0) cost += " · " + (card.HasStarCostX ? "X" : stars.ToString()) + " ★";
+            return cost;
+        }
+
+        private void RefreshCardCosts()
+        {
+            if (_cardRow == null || _hand == null || ModSettings.CompactHandViewer) return;
+            try
+            {
+                var cards = _hand.Cards;
+                if (cards.Count != _cardViews.Count || cards.Count != _cardRow.GetChildCount())
+                { _cardsDirty = true; return; }
+
+                for (int i = 0; i < cards.Count; i++)
+                {
+                    var card = cards[i];
+                    if (!_cardViews.TryGetValue(card, out var view) || !GodotObject.IsInstanceValid(view.Control) ||
+                        view.Control.GetParent() != _cardRow || view.Control.GetIndex() != i)
+                    { _cardsDirty = true; return; }
+
+                    try
+                    {
+                        string cost = ReadCost(card);
+                        if (view.Visual.Cost != cost) UpdateCard(view, view.Visual with { Cost = cost });
+                    }
+                    catch (Exception ex) { LogError(ex); }
+                }
+            }
+            catch (Exception ex) { LogError(ex); _cardsDirty = true; }
         }
         private void SyncCards(IReadOnlyList<CardModel> cards)
         {

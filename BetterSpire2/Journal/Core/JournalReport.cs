@@ -45,6 +45,12 @@ public static class JournalReportBuilder
             _ => (selection.Round == 0 ? T("Setup", "Préparation") : T("Round ", "Tour ") + selection.Round) + T(" · Combat ", " · Combat ") + number +
                 (selection.FollowLive && combat?.Outcome == CombatOutcome.InProgress ? T(" · Live", " · En cours") : "")
         };
+        var relevantCombats = selection.Scope == JournalScope.Run
+            ? run.Combats
+            : combat == null ? new List<CombatRecord>() : new List<CombatRecord> { combat };
+        bool conventionAvailable = relevantCombats.Count > 0 && relevantCombats.All(c => c.ConventionAttributionVersion >= 1);
+        var partialReasons = relevantCombats.Where(c => c.Partial).SelectMany(c => c.PartialReasons)
+            .Distinct(StringComparer.Ordinal).Take(16).ToArray();
         var rows = new List<JournalRow>();
         string section;
         if (timeline && selection.Scope != JournalScope.Run)
@@ -64,8 +70,7 @@ public static class JournalReportBuilder
                 if (source.Stats[Stat.BlockGained] > 0) values.Add("+" + N(source.Stats[Stat.BlockGained]) + T(" block", " bloc"));
                 if (source.Stats[Stat.HpLost] > 0) values.Add("−" + N(source.Stats[Stat.HpLost]) + T(" HP", " PV"));
                 if (values.Count == 0) continue;
-                string name = source.Id == "effect:unknown" ? T("Other effects · source unavailable", "Autres effets · source non fournie") :
-                    source.Id == "other:overflow" ? T("Other sources (grouped)", "Autres sources (regroupées)") : source.Name;
+                string name = SourceName(source, french);
                 rows.Add(new JournalRow(name, string.Join(" · ", values)));
             }
             if (rows.Count == 0) rows.Add(new JournalRow(T("No attributed source", "Aucune source attribuée"), ""));
@@ -84,13 +89,29 @@ public static class JournalReportBuilder
         else
         {
             section = T("Observed details", "Détail des valeurs observées");
+            rows.Add(new JournalRow(T("Enemy damage · HP / block / overkill", "Dégâts ennemis · PV / bloc / excès"),
+                $"{N(totals[Stat.DamageDealtHp])} / {N(totals[Stat.DamageDealtBlocked])} / {N(totals[Stat.Overkill])}"));
+            if (conventionAvailable)
+            {
+                long conventionalHp = stats.ConventionDamage[Stat.DamageDealtHp];
+                long conventionalBlock = stats.ConventionDamage[Stat.DamageDealtBlocked];
+                long conventionalOverkill = stats.ConventionDamage[Stat.Overkill];
+                rows.Add(new JournalRow(T("Direct attribution · HP / block / overkill", "Attribution directe · PV / bloc / excès"),
+                    $"{N(totals[Stat.DamageDealtHp] - conventionalHp)} / {N(totals[Stat.DamageDealtBlocked] - conventionalBlock)} / {N(totals[Stat.Overkill] - conventionalOverkill)}"));
+                rows.Add(new JournalRow(T("Poison/Doom split · HP / block / overkill", "Répartition poison/Trépas · PV / bloc / excès"),
+                    $"{N(conventionalHp)} / {N(conventionalBlock)} / {N(conventionalOverkill)}",
+                    Detail: T("Poison and Doom are apportioned by observed stack contribution; this is a convention, not native dealer ownership.",
+                        "Poison et Trépas sont répartis selon les contributions observées aux charges ; cette convention ne représente pas une propriété native.")));
+            }
+            else
+                rows.Add(new JournalRow(T("Direct / poison-Doom attribution", "Attribution directe / poison-Trépas"),
+                    T("Unavailable for this archive", "Indisponible dans cette archive")));
             rows.Add(new JournalRow(T("Block gained / expired / removed", "Bloc gagné / dissipé / retiré"),
                 $"{N(totals[Stat.BlockGained])} / {N(totals[Stat.BlockExpired])} / {N(totals[Stat.BlockRemoved])}"));
             rows.Add(new JournalRow(T("Energy spent / generated", "Énergie dépensée / générée"), $"{N(totals[Stat.EnergySpent])} / {N(totals[Stat.EnergyGained])}"));
             rows.Add(new JournalRow(T("Cards drawn / discarded / exhausted", "Cartes piochées / défaussées / épuisées"),
                 $"{N(totals[Stat.CardsDrawn])} / {N(totals[Stat.CardsDiscarded])} / {N(totals[Stat.CardsExhausted])}"));
             rows.Add(new JournalRow(T("Healing received", "Soins reçus"), "+" + N(totals[Stat.Healing])));
-            rows.Add(new JournalRow(T("Damage to enemy block / overkill", "Dégâts au bloc adverse / excédent mortel"), $"{N(totals[Stat.DamageDealtBlocked])} / {N(totals[Stat.Overkill])}"));
             rows.Add(new JournalRow(T("Cards generated / potions used", "Cartes générées / potions utilisées"), $"{N(totals[Stat.CardsGenerated])} / {N(totals[Stat.PotionsUsed])}"));
             if (totals[Stat.PetHpLost] > 0 || totals[Stat.PetHealing] > 0 || totals[Stat.PetDamageDealtHp] > 0)
             {
@@ -105,6 +126,15 @@ public static class JournalReportBuilder
                 rows.Add(new JournalRow(T("Unattributed enemy HP / block · all players", "Sans attribution : PV / bloc · global"),
                     $"{N(unknown[Stat.DamageDealtHp])} / {N(unknown[Stat.DamageDealtBlocked])}"));
         }
+        if (partialReasons.Length > 0)
+        {
+            var reasonRows = partialReasons.Select(reason =>
+            {
+                string detail = JournalPartialReasonText.Format(reason, french);
+                return new JournalRow(T("Missing: ", "Manquant : ") + detail, "", Detail: detail);
+            }).ToArray();
+            rows.InsertRange(0, reasonRows);
+        }
         bool partial = selection.Scope == JournalScope.Run ? run.Partial || run.Combats.Any(c => c.Partial) : combat?.Partial == true;
         string note = partial ? T("Incomplete record: some earlier observations are missing.", "Relevé incomplet : certaines observations antérieures manquent.") :
             selection.Scope == JournalScope.Round && selection.Round > 0 ? T("Player and enemy phases of this round. Setup is separate.", "Phases joueur et ennemie de ce tour. Préparation séparée.") :
@@ -116,8 +146,8 @@ public static class JournalReportBuilder
                 ? T("Legacy combat: totals are available, but no timeline was recorded.", "Ancien combat : totaux disponibles, sans chronologie enregistrée.")
                 : combat.DamageTraceTruncated
                 ? T("Old trace rows were pruned; aggregate totals are unchanged.", "Anciennes lignes retirées ; les totaux restent inchangés.")
-                : T("Native results. Poison shares are conventional. Pre-damage reductions are not reconstructed.",
-                    "Résultats natifs. Parts de poison conventionnelles. Réductions initiales non reconstituées.");
+                : T("Native results. Poison/Doom shares are conventional. Pre-damage reductions are not reconstructed.",
+                    "Résultats natifs. Parts de poison/Trépas conventionnelles. Réductions initiales non reconstituées.");
         int pages = Math.Max(1, (rows.Count + RowsPerPage - 1) / RowsPerPage);
         page = Math.Clamp(page, 0, pages - 1);
         return new JournalReport { Context = context, Player = player, Section = section, Note = note,
@@ -134,5 +164,21 @@ public static class JournalReportBuilder
         "won" => fr ? "Partie gagnée" : "Run won", "lost" => fr ? "Partie perdue" : "Run lost",
         "abandoned" => fr ? "Abandonnée" : "Abandoned", "suspended" => fr ? "En pause" : "Paused",
         _ => fr ? "Partie en cours" : "Current run"
+    };
+
+    private static string SourceName(JournalSource source, bool french) => SourceName(source.Id, source.Name, french);
+    internal static string SourceName(string id, string name, bool french) => id switch
+    {
+        "effect:unknown" => french ? "Autres effets · source non fournie" : "Other effects · source unavailable",
+        "other:overflow" => french ? "Autres sources (regroupées)" : "Other sources (grouped)",
+        "effect:poison" => french ? "Poison" : "Poison",
+        "effect:doom" => french ? "Trépas" : "Doom",
+        "effect:strangle" => french ? "Étranglement" : "Strangle",
+        "effect:lightning-passive" => french ? "Orbe de foudre (passif)" : "Lightning orb (passive)",
+        "effect:lightning-evoke" => french ? "Orbe de foudre (évocation)" : "Lightning orb (evoke)",
+        "effect:dark-orb-evoke" => french ? "Orbe des ténèbres (évocation)" : "Dark orb (evoke)",
+        "effect:thorns" => french ? "Épines" : "Thorns",
+        "effect:flame-barrier" => french ? "Barrière de feu" : "Flame Barrier",
+        _ => string.IsNullOrWhiteSpace(name) ? id : name
     };
 }

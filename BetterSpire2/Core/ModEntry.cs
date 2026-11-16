@@ -44,6 +44,26 @@ public class ModEntry
         typeof(GameExitPatch)
     };
 
+    private static readonly Type[] _effectPatches = new Type[]
+    {
+        typeof(Journal_NativeDamageScope_Patch),
+        typeof(Journal_NativeDamageResults_Patch),
+        typeof(Journal_DoomBatchScope_Patch),
+        typeof(Journal_LightningOrbDamageOrigin_Patch),
+        typeof(Journal_DarkOrbDamageOrigin_Patch),
+        typeof(Journal_ThornsDamageOrigin_Patch),
+        typeof(Journal_FlameBarrierDamageOrigin_Patch),
+        typeof(Journal_ExplosiveArrowsDamageOrigin_Patch),
+        typeof(Journal_ViolentChordDamageOrigin_Patch),
+        typeof(Journal_EffectCommandScope_Patch),
+        typeof(Journal_EffectHpResult_Patch),
+        typeof(Journal_StrangleDamageOrigin_Patch),
+        typeof(Journal_DoomKillOrigin_Patch),
+        typeof(Journal_JudgementDamageOrigin_Patch),
+        typeof(Journal_JudgementCommandScope_Patch),
+        typeof(Journal_JudgementHpResult_Patch)
+    };
+
     private static readonly Type[] _mapPatches = new Type[2]
     {
         typeof(NMapDrawings_HandleDrawingMessage_Patch),
@@ -83,13 +103,15 @@ public class ModEntry
         ModLog.Info("Settings loaded");
         Harmony harmony = new Harmony(HarmonyId);
         int succeeded = 0;
+        int skipped = 0;
         int failed = 0;
-        PatchGroup(harmony, "Combat", _combatPatches, ref succeeded, ref failed);
-        PatchGroup(harmony, "Poison", _poisonPatches, ref succeeded, ref failed);
-        PatchGroup(harmony, "UI", _uiPatches, ref succeeded, ref failed);
-        PatchGroup(harmony, "Map", _mapPatches, ref succeeded, ref failed);
-        ModLog.Info($"Harmony patching complete: {succeeded} succeeded, {failed} failed");
-        ModLog.Info("ModEntry.Init() complete — BetterSpire 3.6.2 for game v0.111");
+        PatchGroup(harmony, "Combat", _combatPatches, ref succeeded, ref skipped, ref failed);
+        PatchGroup(harmony, "Poison", _poisonPatches, ref succeeded, ref skipped, ref failed);
+        PatchGroup(harmony, "Effect damage", _effectPatches, ref succeeded, ref skipped, ref failed);
+        PatchGroup(harmony, "UI", _uiPatches, ref succeeded, ref skipped, ref failed);
+        PatchGroup(harmony, "Map", _mapPatches, ref succeeded, ref skipped, ref failed);
+        ModLog.Info($"Harmony patching complete: {succeeded} succeeded, {skipped} skipped, {failed} failed");
+        ModLog.Info("ModEntry.Init() complete — BetterSpire 3.6.5 for game v0.113");
         ModRuntime.EnsureStarted();
         if (ModSettings.ShowClock)
         {
@@ -97,27 +119,40 @@ public class ModEntry
         }
     }
 
-    private static void PatchGroup(Harmony harmony, string groupName, Type[] patchClasses, ref int succeeded, ref int failed)
+    private static void PatchGroup(Harmony harmony, string groupName, Type[] patchClasses, ref int succeeded, ref int skipped, ref int failed)
     {
         ModLog.Info($"Patching {groupName}...");
         foreach (Type patchClass in patchClasses)
         {
-            PatchClass(harmony, patchClass, ref succeeded, ref failed);
+            PatchClass(harmony, patchClass, ref succeeded, ref skipped, ref failed);
         }
     }
 
-    private static void PatchClass(Harmony harmony, Type patchClass, ref int succeeded, ref int failed)
+    private static void PatchClass(Harmony harmony, Type patchClass, ref int succeeded, ref int skipped, ref int failed)
     {
         try
         {
-            harmony.CreateClassProcessor(patchClass).Patch();
-            ModLog.Info("  Patched: " + patchClass.Name);
+            var patched = harmony.CreateClassProcessor(patchClass).Patch();
+            if (patched == null || patched.Count == 0)
+            {
+                ReportMissingObservation(patchClass);
+                ModLog.Info("  Skipped: " + patchClass.Name + " (no patches applied)");
+                skipped++;
+                return;
+            }
+            ModLog.Info($"  Patched: {patchClass.Name} ({patched.Count} methods)");
             succeeded++;
         }
         catch (Exception ex)
         {
+            ReportMissingObservation(patchClass);
             ModLog.Error("Patch " + patchClass.Name, ex);
             failed++;
         }
+    }
+    private static void ReportMissingObservation(Type patchClass)
+    {
+        if (patchClass.Name.StartsWith("Journal_", StringComparison.Ordinal))
+            BetterSpire2.Journal.Game.DamageObservationCoverage.Require("patch:" + patchClass.Name, false);
     }
 }

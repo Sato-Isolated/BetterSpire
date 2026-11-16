@@ -18,21 +18,6 @@ using MegaCrit.Sts2.Core.ValueProps;
 
 namespace BetterSpire2.Patches.Combat;
 
-internal static class PoisonNativeMethods
-{
-    internal static MethodInfo? SingleDamage() => AccessTools.Method(typeof(CreatureCmd),
-        nameof(CreatureCmd.Damage), new[] { typeof(PlayerChoiceContext), typeof(Creature), typeof(decimal),
-            typeof(ValueProp), typeof(CardModel), typeof(CardPlay) });
-    internal static MethodInfo? ManyDamage() => AccessTools.Method(typeof(CreatureCmd),
-        nameof(CreatureCmd.Damage), new[] { typeof(PlayerChoiceContext), typeof(IEnumerable<Creature>), typeof(decimal),
-            typeof(ValueProp), typeof(Creature), typeof(CardModel), typeof(CardPlay) });
-    internal static MethodInfo? MoveNext(MethodInfo? method) => method?
-        .GetCustomAttribute<AsyncStateMachineAttribute>()?.StateMachineType.GetMethod("MoveNext",
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-    internal static MethodInfo? PoisonMoveNext() => MoveNext(AccessTools.Method(typeof(PoisonPower),
-        nameof(PoisonPower.Trigger)));
-}
-
 [HarmonyPatch]
 internal static class Journal_PoisonDamageOrigin_Patch
 {
@@ -40,6 +25,7 @@ internal static class Journal_PoisonDamageOrigin_Patch
     private static bool Prepare()
     {
         bool supported = PoisonNativeMethods.PoisonMoveNext() != null && PoisonNativeMethods.SingleDamage() != null;
+        DamageObservationCoverage.Require("poison.origin", supported);
         if (!supported) ModLog.Info("Poison provenance unavailable: native signature changed; damage remains unattributed.");
         return supported;
     }
@@ -58,9 +44,11 @@ internal static class Journal_PoisonDamageOrigin_Patch
         // corrupt IL, or identify poison by matching an unrelated damage amount.
         if (ownerFields.Length != 1 || code.Count(c => c.Calls(original)) != 1)
         {
+            DamageObservationCoverage.Require("poison.origin", false);
             ModLog.Info("Poison provenance unavailable: unexpected native IL; keeping original damage call.");
             return code;
         }
+        DamageObservationCoverage.Require("poison.origin", true);
         MethodInfo replacement = AccessTools.Method(typeof(PoisonDamageObserver), nameof(PoisonDamageObserver.Damage));
         int index = code.FindIndex(c => c.Calls(original));
         var call = code[index];
@@ -81,7 +69,11 @@ internal static class Journal_PoisonDamageOrigin_Patch
 internal static class Journal_DamageCommandScope_Patch
 {
     [HarmonyPrepare]
-    private static bool Prepare() => PoisonNativeMethods.ManyDamage() != null;
+    private static bool Prepare()
+    {
+        bool supported = PoisonNativeMethods.ManyDamage() != null;
+        DamageObservationCoverage.Require("poison.scope", supported); return supported;
+    }
     [HarmonyTargetMethod]
     private static MethodBase TargetMethod() => PoisonNativeMethods.ManyDamage()!;
     [HarmonyPrefix]
@@ -102,8 +94,11 @@ internal static class Journal_DamageCommandScope_Patch
 internal static class Journal_PoisonHistoryTag_Patch
 {
     [HarmonyPrepare]
-    private static bool Prepare() => PoisonNativeMethods.MoveNext(
-        PoisonNativeMethods.ManyDamage()) != null;
+    private static bool Prepare()
+    {
+        bool supported = PoisonNativeMethods.MoveNext(PoisonNativeMethods.ManyDamage()) != null;
+        DamageObservationCoverage.Require("poison.history", supported); return supported;
+    }
     [HarmonyTargetMethod]
     private static MethodBase TargetMethod() => PoisonNativeMethods.MoveNext(
         PoisonNativeMethods.ManyDamage())!;
@@ -114,9 +109,11 @@ internal static class Journal_PoisonHistoryTag_Patch
         var original = AccessTools.Method(typeof(CombatHistory), nameof(CombatHistory.DamageReceived));
         if (code.Count(c => c.Calls(original)) != 1)
         {
+            DamageObservationCoverage.Require("poison.history", false);
             ModLog.Info("Poison provenance unavailable: native history call changed; keeping original history.");
             return code;
         }
+        DamageObservationCoverage.Require("poison.history", true);
         // Only the native command's own result, not a manual history entry made
         // by a nested callback, gets a tag. Preserve all arguments and IL labels.
         var call = code.Single(c => c.Calls(original));
@@ -132,8 +129,12 @@ internal static class Journal_PoisonRemoved_Patch
     [HarmonyPrefix]
     private static void Prefix(PowerModel power)
     {
-        if (power is not PoisonPower poison) return;
-        try { JournalService.ForgetPoison(poison); }
+        if (power is not (PoisonPower or DoomPower)) return;
+        try
+        {
+            if (power is PoisonPower poison) JournalService.ForgetPoison(poison);
+            else JournalService.ForgetDoom((DoomPower)power);
+        }
         catch (Exception ex) { JournalService.Session.MarkPartial(); ModLog.Error("Journal.PoisonRemoved", ex); }
     }
 }

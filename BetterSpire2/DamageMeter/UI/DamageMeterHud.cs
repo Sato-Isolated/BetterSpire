@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using BetterSpire2.DamageMeter.Core;
 using BetterSpire2.Journal.Core;
 using Godot;
@@ -53,7 +54,7 @@ internal sealed class DamageMeterHud
     private readonly Label[] _rank = new Label[5], _name = new Label[5], _value = new Label[5], _share = new Label[5];
     private readonly ColorRect[] _track = new ColorRect[5], _bar = new ColorRect[5];
     private long _revision = -1;
-    private (string Run, string? Combat, DamageMeterScope Scope, bool French, bool Block, bool Bars) _stamp;
+    private (string Run, string? Combat, DamageMeterScope Scope, int Round, bool French, bool Block, bool Bars) _stamp;
     private IReadOnlyList<DamageMeterRow> _rows = Array.Empty<DamageMeterRow>();
     private (Vector2 View, int Rows, bool Multi, bool Footer, int Scale, int X, int Y)? _layoutStamp;
     private bool _invalid = true;
@@ -73,7 +74,8 @@ internal sealed class DamageMeterHud
         if (!visible || session.Run == null || session.Run.Players.Count == 0) { Hide(); return; }
         if (!EnsureCreated()) return;
         bool french = ModText.IsFrench;
-        var stamp = (session.Run.Key, session.Active?.Key, scope, french, ModSettings.DamageMeterIncludeBlock, ModSettings.DamageMeterShowBars);
+        int round = scope == DamageMeterScope.Round ? session.Active?.LatestRound ?? 0 : 0;
+        var stamp = (session.Run.Key, session.Active?.Key, scope, round, french, ModSettings.DamageMeterIncludeBlock, ModSettings.DamageMeterShowBars);
         if (_invalid || _revision != session.DamageRevision || _stamp != stamp)
         {
             using var measurement = PerformanceProbe.Measure(ProbeSection.DamageMeter);
@@ -136,7 +138,7 @@ internal sealed class DamageMeterHud
         _heading!.MouseFilter = locked ? Control.MouseFilterEnum.Ignore : Control.MouseFilterEnum.Stop;
         _heading.MouseDefaultCursorShape = locked ? Control.CursorShape.Arrow : Control.CursorShape.Move;
         _heading.TooltipText = ModText.T(locked ? "Meter position locked" : "Drag the title to move") +
-            (_snapshot?.IsPartial == true ? "\n" + ModText.T("Partial data: some damage could not be observed.") : "") +
+            (_snapshot?.IsPartial == true ? "\n" + PartialTooltip(_snapshot) : "") +
             "\n" + T("Percentages use attributed damage only. Poison is shared by observed stack contribution.",
                 "Pourcentages sur les dégâts attribués uniquement. Poison réparti selon les contributions observées.");
     }
@@ -145,8 +147,13 @@ internal sealed class DamageMeterHud
         var rows = _rows;
         bool multi = data.IsMultiplayer;
         float width = multi ? 276 : 216;
-        _heading!.Text = data.Scope == DamageMeterScope.Combat
-            ? T("DAMAGE · COMBAT", "DÉGÂTS · COMBAT") : T("DAMAGE · RUN", "DÉGÂTS · RUN");
+        _heading!.Text = data.Scope switch
+        {
+            DamageMeterScope.Round => T("DAMAGE · ROUND ", "DÉGÂTS · TOUR ") + data.RoundNumber.GetValueOrDefault(),
+            DamageMeterScope.Combat => T("DAMAGE · COMBAT", "DÉGÂTS · COMBAT"),
+            _ => T("DAMAGE · RUN", "DÉGÂTS · RUN")
+        };
+        if (data.IsPartial) _heading.Text += T(" · PARTIAL", " · PARTIEL");
         if (data.IncludesBlock) _heading.Text += T(" · HP + BLOCK", " · PV + BLOC");
         _heading.Size = new Vector2(width, 18);
         _heading.AddThemeColorOverride("font_color", data.IsPartial ? _local : _quiet);
@@ -226,6 +233,9 @@ internal sealed class DamageMeterHud
     }
     private static void SetRect(Control control, float x, float y, float width, float height)
     { control.Position = new Vector2(x, y); control.Size = new Vector2(width, height); }
+    private static string PartialTooltip(DamageMeterSnapshot data) => data.PartialReasons.Count == 0
+        ? ModText.T("Partial data: some damage could not be observed.")
+        : string.Join("\n", data.PartialReasons.Select(reason => JournalPartialReasonText.Format(reason, ModText.IsFrench)));
     private static bool Valid(GodotObject? obj) => obj != null && GodotObject.IsInstanceValid(obj);
     private static string T(string en, string fr) => ModText.IsFrench ? fr : en;
 }

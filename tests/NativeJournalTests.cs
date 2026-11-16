@@ -148,6 +148,7 @@ internal static class NativeJournalTests
     private static void Main()
     {
         Accounting(); Revisions(); Cursor(); Traces();
+        EffectDamageTests.Run().GetAwaiter().GetResult();
         Console.WriteLine($"PASS {_checks} native-journal accounting, revision, cursor, trace, persistence and timeline checks (no game runtime).");
     }
 }

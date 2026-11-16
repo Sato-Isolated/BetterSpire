@@ -8,6 +8,7 @@ namespace BetterSpire2.Core;
 
 public static class ModSettings
 {
+    private const int MaxSettingsBytes = 64 * 1024;
     private sealed class PositionData
     {
         public float X { get; set; }
@@ -53,6 +54,7 @@ public static class ModSettings
         public bool DamageMeterIncludeBlock { get; set; } = false;
         public bool DamageMeterShowBars { get; set; } = true;
         public bool DamageMeterOnlyCombat { get; set; } = false;
+        public bool DamageMeterCurrentRound { get; set; } = false;
         public int DamageMeterScalePercent { get; set; } = 100;
         public int DamageMeterXPercent { get; set; } = 100;
         public int DamageMeterYPercent { get; set; } = 12;
@@ -107,6 +109,7 @@ public static class ModSettings
     public static bool DamageMeterIncludeBlock { get => _data.DamageMeterIncludeBlock; set => _data.DamageMeterIncludeBlock = value; }
     public static bool DamageMeterShowBars { get => _data.DamageMeterShowBars; set => _data.DamageMeterShowBars = value; }
     public static bool DamageMeterOnlyCombat { get => _data.DamageMeterOnlyCombat; set => _data.DamageMeterOnlyCombat = value; }
+    public static bool DamageMeterCurrentRound { get => _data.DamageMeterCurrentRound; set => _data.DamageMeterCurrentRound = value; }
     public static int DamageMeterScalePercent { get => Math.Clamp(_data.DamageMeterScalePercent, 75, 150); set => _data.DamageMeterScalePercent = Math.Clamp(value, 75, 150); }
     public static int DamageMeterXPercent { get => Math.Clamp(_data.DamageMeterXPercent, 0, 100); set => _data.DamageMeterXPercent = Math.Clamp(value, 0, 100); }
     public static int DamageMeterYPercent { get => Math.Clamp(_data.DamageMeterYPercent, 0, 100); set => _data.DamageMeterYPercent = Math.Clamp(value, 0, 100); }
@@ -262,7 +265,8 @@ public static class ModSettings
             _loadedFromFile = File.Exists(SettingsPath);
             if (_loadedFromFile)
             {
-                SettingsData? loaded = JsonSerializer.Deserialize<SettingsData>(File.ReadAllText(SettingsPath));
+                byte[] bytes = ReadSettingsBytes(SettingsPath);
+                SettingsData? loaded = JsonSerializer.Deserialize<SettingsData>(bytes);
                 if (loaded != null)
                 {
                     _data = loaded;
@@ -278,6 +282,24 @@ public static class ModSettings
             _loadedFromFile = false;
             Revision++;
         }
+    }
+
+    private static byte[] ReadSettingsBytes(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, System.IO.FileAccess.Read, FileShare.Read);
+        if (stream.Length > MaxSettingsBytes)
+            throw new InvalidDataException("Settings file exceeds 64 KB.");
+
+        using var output = new MemoryStream((int)stream.Length);
+        var buffer = new byte[4096];
+        int read;
+        while ((read = stream.Read(buffer, 0, buffer.Length)) != 0)
+        {
+            if (output.Length + read > MaxSettingsBytes)
+                throw new InvalidDataException("Settings file exceeds 64 KB.");
+            output.Write(buffer, 0, read);
+        }
+        return output.ToArray();
     }
 
     public static void Save()

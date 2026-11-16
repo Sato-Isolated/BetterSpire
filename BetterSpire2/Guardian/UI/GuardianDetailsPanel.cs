@@ -9,14 +9,18 @@ using MegaCrit.Sts2.Core.Nodes;
 
 namespace BetterSpire2.Guardian.UI;
 
-/// <summary>Optional diagnostics, never the permanent HUD. Created only after F2.</summary>
+/// <summary>Optional diagnostics, never the permanent HUD. Created only after F8.</summary>
 internal sealed class GuardianDetailsPanel
 {
     private CanvasLayer? _layer;
     private Panel? _panel;
-    private Label? _heading, _main, _block, _recovery, _footer;
+    private Panel? _toastPanel;
+    private Label? _toastLabel;
+    private Timer? _toastTimer;
+    private Label? _heading, _main, _block, _recovery, _hiddenStatus, _footer;
     private readonly List<(Label Left, Label Right)> _rows = new();
     private bool _details;
+    private bool _stale;
     private int _page;
     private const int RowsPerPage = 8;
     private readonly Color _quiet = HudTheme.Muted;
@@ -31,18 +35,66 @@ internal sealed class GuardianDetailsPanel
     internal void ChangePage(int delta) { _page = Math.Max(0, _page + delta); }
     internal void Hide() { if (Valid(_panel)) _panel!.Visible = false; }
 
-    internal void Render(ForecastResult result, CombatLedger ledger)
+    internal void MarkStale()
+    {
+        _stale = true;
+        if (!_details || !EnsureCreated()) return;
+        _panel!.Visible = true;
+        Set(_heading!, "GUARDIAN  /  " + T("UPDATING", "RECALCUL"), _warning);
+        Set(_main!, T("Recalculating forecast…", "Prévision en cours de recalcul…"), _warning);
+        Set(_block!, T("Previous figures are hidden until the new forecast is ready.",
+            "Les anciens chiffres sont masqués jusqu’au calcul de la nouvelle prévision."), _quiet);
+        Set(_recovery!, "", _quiet);
+        _hiddenStatus!.Visible = false;
+        foreach (var row in _rows) { row.Left.Visible = false; row.Right.Visible = false; }
+        Set(_footer!, "F8 ×  ·  " + T("Alt+PgUp/PgDn to change page", "Alt+PgUp/PgDn pour changer de page"), _quiet);
+        Layout(forceCompact: true);
+    }
+
+    internal void UpdateHiddenReadoutCount(int count)
+    {
+        if (!_details || _stale || !Valid(_hiddenStatus)) return;
+        bool visible = count > 0;
+        string plural = count > 1 ? "s" : "";
+        string text = !visible ? "" : ModText.IsFrench
+            ? $"Affichage : {count} chiffre{plural} masqué{plural} faute de place"
+            : $"Display: {count} readout{plural} hidden for lack of space";
+        Set(_hiddenStatus!, text, _quiet);
+        _hiddenStatus!.Visible = visible;
+    }
+
+    internal void ShowExportStatus(string message, string? tooltip, bool success)
+    {
+        if (!EnsureCreated()) return;
+        if (!Valid(_toastPanel) || !Valid(_toastLabel) || !Valid(_toastTimer)) return;
+        _toastLabel!.Text = message;
+        _toastLabel.TooltipText = tooltip ?? message;
+        _toastLabel.AddThemeColorOverride("font_color", success ? HudTheme.Success : HudTheme.Danger);
+        var viewport = _toastPanel!.GetViewport().GetVisibleRect();
+        float width = Math.Max(120, Math.Min(480, viewport.Size.X - 24));
+        _toastPanel.Size = new Vector2(width, 44);
+        _toastPanel.Position = new Vector2(viewport.Position.X + (viewport.Size.X - width) / 2f, viewport.Position.Y + 24);
+        _toastLabel.Position = new Vector2(12, 6);
+        _toastLabel.Size = new Vector2(width - 24, 32);
+        _toastPanel.Visible = true;
+        _toastTimer!.Start(3.5);
+    }
+
+    internal void Render(ForecastResult result, CombatLedger ledger, int hiddenReadoutCount)
     {
         if (!_details) { Hide(); return; }
         if (!EnsureCreated()) return;
+        _stale = false;
         var local = result.Local;
         _panel!.Visible = true;
-        Color severity = result.KnownLethal ? _danger : result.IsPartial ? _warning : _text;
+        Color severity = result.IsPartial ? _warning : result.KnownLethal ? _danger : _text;
         string verdict = result.KnownLethal
             ? (result.IsPartial ? T("POSSIBLE LETHAL", "MORTEL POSSIBLE") : T("LETHAL PROJECTED", "MORTEL PRÉVU"))
             : result.IsPartial ? T("PARTIAL PROJECTION", "PROJECTION PARTIELLE") : T("PROJECTION", "PROJECTION");
         Set(_heading!, "GUARDIAN  /  " + verdict, severity);
-        Set(_main!, $"−{local.HpLost} {T("HP", "PV")}  →  {local.FinalHp} {T("remaining", "restants")}", severity);
+        Set(_main!, result.BranchEnumerationComplete
+            ? $"−{Range(local.MinimumHpLost, local.MaximumHpLost)} {T("HP", "PV")}  →  {Range(local.MinimumFinalHp, local.MaximumFinalHp)} {T("remaining", "restants")}"
+            : T("Remaining HP: undetermined", "PV restants : indéterminés"), severity);
         Set(_block!, T("Block", "Blocage") + $"  {local.StartBlock}  +{local.BlockGained} " +
             T("projected", "prévus") + $"  →  {local.FinalBlock}", _blockColor);
         int petLoss = result.Actors.Values.Where(a => a.IsLocalPet).Sum(a => a.HpLost);
@@ -51,7 +103,20 @@ internal sealed class GuardianDetailsPanel
         if (petLoss > 0) extras += $"  ·  Osty −{petLoss}";
         if (local.BuffersUsed > 0) extras += $"  ·  Buffer −{local.BuffersUsed}";
         if (local.Revivals > 0) extras = T("Lizard Tail consumed", "Queue de lézard consommée") + "  ·  " + extras;
+        if (result.ScenarioCount > 1)
+        {
+            Set(_block!, T("Several outcomes: see the possible sequence below.",
+                "Plusieurs résultats : voir la séquence possible ci-dessous."), _quiet);
+            extras = T("HP ranges cover all explored outcomes.", "Les fourchettes de PV couvrent les résultats explorés.");
+        }
+        if (!result.BranchEnumerationComplete)
+        {
+            Set(_block!, T("256-state limit reached; outcomes are incomplete.",
+                "Limite de 256 états atteinte ; résultats incomplets."), _warning);
+            extras = T("No exhaustive HP range is available.", "Aucune fourchette exhaustive de PV disponible.");
+        }
         Set(_recovery!, extras, local.Revivals > 0 ? _warning : _quiet);
+        UpdateHiddenReadoutCount(hiddenReadoutCount);
         var lines = BuildDetails(result, ledger);
         RenderDetails(lines);
         Layout();
@@ -61,11 +126,13 @@ internal sealed class GuardianDetailsPanel
     {
         if (!_details) { Hide(); return; }
         if (!EnsureCreated()) return;
+        _stale = true;
         _panel!.Visible = true;
         Set(_heading!, "GUARDIAN  /  " + (error ? T("UNAVAILABLE", "INDISPONIBLE") : T("RESOLVING", "RÉSOLUTION")), error ? _warning : _quiet);
         Set(_main!, message, _text);
         Set(_block!, explanation, _quiet);
         Set(_recovery!, ledger == null ? "" : T("Actual combat loss", "PV réellement perdus au combat") + $" : {ledger.PlayerHpLost}", _quiet);
+        _hiddenStatus!.Visible = false;
         foreach (var row in _rows) { row.Left.Visible = false; row.Right.Visible = false; }
         Set(_footer!, "F1 " + T("settings", "paramètres") + "  ·  F4 " + T("hide", "masquer"), _quiet);
         Layout(forceCompact: true);
@@ -74,12 +141,25 @@ internal sealed class GuardianDetailsPanel
     private List<(string Left, string Right)> BuildDetails(ForecastResult result, CombatLedger ledger)
     {
         var lines = new List<(string, string)>();
-        lines.Add((T("If you end the turn now", "Si tu termines le tour maintenant"), ""));
-        lines.Add((T("Through the displayed enemy attacks", "Jusqu'aux attaques ennemies affichées"), ""));
+        lines.Add((T("Numbers: remaining HP (projected HP loss)", "Chiffres : PV restants (PV perdus prévus)"), ""));
+        lines.Add((T("Assumes: end turn now; shown attacks", "Hypothèse : fin du tour, attaques affichées"), ""));
+        if (result.CompatibilityNotice is { Length: > 0 } compatibilityNotice)
+            lines.Add(("i " + compatibilityNotice, ""));
+        if (!result.BranchEnumerationComplete)
+            lines.Add((T("! Exploration stopped at 256 states; HP bounds are unavailable.",
+                "! Exploration arrêtée à 256 états ; bornes de PV indisponibles."), "?"));
+        if (result.ScenarioCount > 1 || !result.BranchEnumerationComplete)
+            lines.Add((T("Sequence: one explored outcome with the lowest local HP.",
+                "Séquence : un résultat exploré avec les PV locaux les plus bas."), ""));
         foreach (string warning in result.Warnings) lines.Add(("! " + warning, "?"));
         if (result.Local.FirstLethalSource != null)
-            lines.Add((T("First lethal hit: ", "Premier coup mortel : ") + result.Local.FirstLethalSource,
+        {
+            string lethalLabel = result.ScenarioCount > 1 || !result.BranchEnumerationComplete
+                ? T("Lethal source in an explored outcome: ", "Source mortelle dans un résultat exploré : ")
+                : T("First lethal hit: ", "Premier coup mortel : ");
+            lines.Add((lethalLabel + result.Local.FirstLethalSource,
                 result.Local.Revivals > 0 ? T("revived", "réanimé") : "!"));
+        }
         foreach (var step in result.Steps)
         {
             if (!result.Actors.TryGetValue(step.Target, out var actor)) continue;
@@ -89,7 +169,7 @@ internal sealed class GuardianDetailsPanel
             {
                 ForecastEventKind.Block => $"+{step.BlockGained} " + T("block", "bloc"),
                 ForecastEventKind.Heal => $"+{step.Healed} " + T("HP", "PV"),
-                ForecastEventKind.Damage => $"−{step.HpLost} " + T("HP", "PV") + $" / {step.BlockSpent} " + T("blk", "bloc"),
+                ForecastEventKind.Damage or ForecastEventKind.DoomCheck => $"−{step.HpLost} " + T("HP", "PV") + $" / {step.BlockSpent} " + T("blk", "bloc"),
                 _ => ""
             };
             if (step.BuffersUsed > 0) values += " / B−1";
@@ -104,6 +184,11 @@ internal sealed class GuardianDetailsPanel
         return lines;
     }
 
+    private static string Range(int minimum, int maximum) => minimum == maximum
+        ? minimum.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        : minimum.ToString(System.Globalization.CultureInfo.InvariantCulture) + "–" +
+            maximum.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
     private void RenderDetails(List<(string Left, string Right)> lines)
     {
         int pages = Math.Max(1, (lines.Count + RowsPerPage - 1) / RowsPerPage);
@@ -114,11 +199,13 @@ internal sealed class GuardianDetailsPanel
             bool visible = _details && index < lines.Count;
             _rows[i].Left.Visible = _rows[i].Right.Visible = visible;
             if (!visible) continue;
-            Set(_rows[i].Left, lines[index].Left, lines[index].Left.StartsWith("!") ? _warning : _quiet);
+            Color rowColor = lines[index].Left.StartsWith("!") ? _warning
+                : lines[index].Left.StartsWith("i ") ? _blockColor : _quiet;
+            Set(_rows[i].Left, lines[index].Left, rowColor);
             Set(_rows[i].Right, lines[index].Right, _text);
         }
-        Set(_footer!, _details ? $"F2 ×  ·  Alt+PgUp/PgDn  {_page + 1}/{pages}  ·  Ctrl+F2 " + T("export", "exporter")
-            : "F2 " + T("details", "détails") + "  ·  F4 " + T("hide", "masquer") + (lines.Any(l => l.Left.StartsWith("!")) ? "  ·  ! " + T("uncertain effects", "effets incertains") : ""), _quiet);
+        Set(_footer!, _details ? $"F8 ×  ·  Alt+PgUp/PgDn  {_page + 1}/{pages}  ·  Ctrl+F8 " + T("export", "exporter")
+            : "F8 " + T("details", "détails") + "  ·  F4 " + T("hide", "masquer") + (lines.Any(l => l.Left.StartsWith("!")) ? "  ·  ! " + T("uncertain effects", "effets incertains") : ""), _quiet);
     }
 
     private bool EnsureCreated()
@@ -136,14 +223,33 @@ internal sealed class GuardianDetailsPanel
         _panel.AddThemeStyleboxOverride("panel", style);
         _layer.AddChild(_panel);
         _heading = MakeLabel(12); _main = MakeLabel(23); _block = MakeLabel(14);
-        _recovery = MakeLabel(12); _footer = MakeLabel(11);
+        _recovery = MakeLabel(12); _hiddenStatus = MakeLabel(11); _footer = MakeLabel(11);
         for (int i = 0; i < RowsPerPage; i++)
         {
             var left = MakeLabel(13); var right = MakeLabel(13);
             right.HorizontalAlignment = HorizontalAlignment.Right;
             _rows.Add((left, right));
         }
+        _toastPanel = new Panel { Name = "GuardianExportToast", Visible = false,
+            MouseFilter = Control.MouseFilterEnum.Ignore, FocusMode = Control.FocusModeEnum.None };
+        _toastPanel.AddThemeStyleboxOverride("panel", HudTheme.Panel(0));
+        _layer.AddChild(_toastPanel);
+        _toastLabel = new Label { MouseFilter = Control.MouseFilterEnum.Ignore,
+            FocusMode = Control.FocusModeEnum.None, ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            VerticalAlignment = VerticalAlignment.Center };
+        _toastLabel.AddThemeFontSizeOverride("font_size", 13);
+        HudTheme.Outline(_toastLabel);
+        _toastPanel.AddChild(_toastLabel);
+        _toastTimer = new Timer { Name = "GuardianExportToastTimer", OneShot = true };
+        _toastTimer.Timeout += HideExportToast;
+        _layer.AddChild(_toastTimer);
         return true;
+    }
+
+    private void HideExportToast()
+    {
+        if (Valid(_toastPanel)) _toastPanel!.Visible = false;
     }
 
     private Label MakeLabel(int fontSize)
@@ -174,6 +280,7 @@ internal sealed class GuardianDetailsPanel
         Place(_main!, 12, 26, width - 24, 29);
         Place(_block!, 12, 57, width - 24, 19);
         Place(_recovery!, 12, 79, width - 24, 17);
+        Place(_hiddenStatus!, 12, 96, width - 24, 15);
         for (int i = 0; i < RowsPerPage; i++)
         {
             Place(_rows[i].Left, 12, 113 + i * 23, width - 188, 22);

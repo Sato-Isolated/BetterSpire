@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace BetterSpire2.Journal.Core;
 
@@ -26,6 +27,8 @@ public sealed class JournalCheckpoint
             bool completed = combat.Outcome != CombatOutcome.InProgress;
             if (!completed || !_completed.TryGetValue(combat, out var snapshot) ||
                 snapshot.Outcome != combat.Outcome || snapshot.Partial != combat.Partial || snapshot.LatestRound != combat.LatestRound ||
+                snapshot.ConventionAttributionVersion != combat.ConventionAttributionVersion ||
+                !snapshot.PartialReasons.SequenceEqual(combat.PartialReasons, StringComparer.Ordinal) ||
                 snapshot.DamageTrace.Count != combat.DamageTrace.Count || snapshot.DamageTraceTruncated != combat.DamageTraceTruncated ||
                 snapshot.LastDamageSequence != combat.LastDamageSequence)
             {
@@ -43,7 +46,8 @@ public sealed class JournalCheckpoint
     private static CombatRecord CopyCombat(CombatRecord source)
     {
         var copy = new CombatRecord { Key = source.Key, Encounter = source.Encounter, Act = source.Act, Floor = source.Floor,
-            LatestRound = source.LatestRound, Outcome = source.Outcome, Partial = source.Partial, ReplacedAttempts = source.ReplacedAttempts };
+            LatestRound = source.LatestRound, Outcome = source.Outcome, Partial = source.Partial, ReplacedAttempts = source.ReplacedAttempts,
+            ConventionAttributionVersion = source.ConventionAttributionVersion, PartialReasons = source.PartialReasons.ToList() };
         copy.DamageTraceVersion = source.DamageTraceVersion;
         copy.DamageTraceTruncated = source.DamageTraceTruncated;
         copy.LastDamageSequence = source.LastDamageSequence;
@@ -53,7 +57,7 @@ public sealed class JournalCheckpoint
             var bucket = new RoundRecord { Number = round.Number, UnattributedDamage = CopyLine(round.UnattributedDamage) };
             foreach (var player in round.Players)
             {
-                var stats = new ActorStats { Totals = CopyLine(player.Value.Totals) };
+                var stats = new ActorStats { Totals = CopyLine(player.Value.Totals), ConventionDamage = CopyLine(player.Value.ConventionDamage) };
                 foreach (var item in player.Value.Sources)
                     stats.Sources[item.Key] = new JournalSource { Id = item.Value.Id, Name = item.Value.Name,
                         IsCard = item.Value.IsCard, Stats = CopyLine(item.Value.Stats) };

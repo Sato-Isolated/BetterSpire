@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -13,7 +13,7 @@ try {
     $transcribing = $true
     Set-Location -LiteralPath $root
     # Remove only our generated deliverables. Never touch the game installation.
-    foreach ($file in @('BetterSpire2Lite.dll', 'BetterSpire2Lite.json', 'BUILD-SUCCESS.txt')) {
+    foreach ($file in @('BetterSpire2Lite.dll', 'BetterSpire2Lite.json', 'BetterSpire2Lite.zip', 'BUILD-SUCCESS.txt')) {
         $old = Join-Path $destination $file
         if (Test-Path -LiteralPath $old) { Remove-Item -LiteralPath $old -Force }
     }
@@ -29,42 +29,45 @@ try {
             throw ('Missing compilation reference: references/' + $reference)
         }
     }
-    Write-Host '1/12 Running the C# simulator and overhead HUD tests...'
+    Write-Host '1/13 Running the C# simulator and overhead HUD tests...'
     & dotnet run --project (Join-Path $root 'tests/Guardian.Core.Tests.csproj') --configuration Release
     if ($LASTEXITCODE -ne 0) { throw 'C# tests failed. No release was produced.' }
-    Write-Host '2/12 Running the C# journal tests...'
+    Write-Host '2/13 Running the C# journal tests...'
     & dotnet run --project (Join-Path $root 'tests/Journal.Core.Tests.csproj') --configuration Release
     if ($LASTEXITCODE -ne 0) { throw 'Journal tests failed. No release was produced.' }
-    Write-Host '3/12 Running the C# run damage meter tests...'
+    Write-Host '3/13 Running the C# run damage meter tests...'
     & dotnet run --project (Join-Path $root 'tests/DamageMeter.Core.Tests.csproj') --configuration Release
     if ($LASTEXITCODE -ne 0) { throw 'Damage meter tests failed. No release was produced.' }
-    Write-Host '4/12 Running C# refresh/cache/checkpoint regression tests...'
+    Write-Host '4/13 Running C# refresh/cache/checkpoint regression tests...'
     & dotnet run --project (Join-Path $root 'tests/Performance.Core.Tests.csproj') --configuration Release
     if ($LASTEXITCODE -ne 0) { throw 'Performance regression tests failed. No release was produced.' }
-    Write-Host '5/12 Running C# HUD dependency, navigation and geometry tests...'
+    Write-Host '5/13 Running C# HUD dependency, navigation and geometry tests...'
     & dotnet run --project (Join-Path $root 'tests/Hud.Core.Tests.csproj') --configuration Release
     if ($LASTEXITCODE -ne 0) { throw 'HUD regression tests failed. No release was produced.' }
-    Write-Host '6/12 Running C# poison provenance and async isolation tests...'
+    Write-Host '6/13 Running C# poison provenance and async isolation tests...'
     & dotnet run --project (Join-Path $root 'tests/Poison.Core.Tests.csproj') --configuration Release
     if ($LASTEXITCODE -ne 0) { throw 'Poison attribution tests failed. No release was produced.' }
-    Write-Host '7/12 Running source-linked game-boundary tests...'
+    Write-Host '7/13 Running source-linked game-boundary tests...'
     & dotnet run --project (Join-Path $root 'tests/GameBoundary.Core.Tests.csproj') --configuration Release
     if ($LASTEXITCODE -ne 0) { throw 'Game boundary tests failed. No release was produced.' }
-    Write-Host '8/12 Checking native journal accounting and damage chronology...'
+    Write-Host '8/13 Checking native journal accounting and damage chronology...'
     & dotnet run --project (Join-Path $root 'tests/NativeJournal.Core.Tests.csproj') --configuration Release
     if ($LASTEXITCODE -ne 0) { throw 'Native journal tests failed. No release was produced.' }
-    Write-Host '9/12 Checking isolated previews and forecast coverage...'
+    Write-Host '9/13 Checking isolated previews and forecast coverage...'
     & dotnet run --project (Join-Path $root 'tests/NativePreview.Core.Tests.csproj') --configuration Release
     if ($LASTEXITCODE -ne 0) { throw 'Preview isolation tests failed. No release was produced.' }
-    Write-Host '10/12 Checking readonly native hooks and combat identity fences...'
+    Write-Host '10/13 Checking readonly native hooks and combat identity fences...'
     & dotnet run --project (Join-Path $root 'tests/NativeHooks.Core.Tests.csproj') --configuration Release
     if ($LASTEXITCODE -ne 0) { throw 'Native hook observer tests failed. No release was produced.' }
-    Write-Host '11/12 Building the actual mod against the supplied DLL references...'
+    Write-Host '11/13 Building the actual mod against the supplied DLL references...'
     & dotnet build (Join-Path $root 'BetterSpire2Lite.csproj') --configuration Release --nologo
     if ($LASTEXITCODE -ne 0) { throw 'The mod did not compile. No release was produced.' }
-    Write-Host '12/12 Checking the v0.111 metadata contract and patch targets...'
+    Write-Host '12/13 Checking the v0.113 metadata contract and patch targets...'
     & dotnet run --project (Join-Path $root 'tests/GameApiCompatibility.Tests.csproj') --configuration Release
-    if ($LASTEXITCODE -ne 0) { throw 'The v0.111 API compatibility contract failed. No release was produced.' }
+    if ($LASTEXITCODE -ne 0) { throw 'The v0.113 API compatibility contract failed. No release was produced.' }
+    Write-Host '13/13 Checking native damage source provenance...'
+    & dotnet run --project (Join-Path $root 'tests/DamageSourceNative.Tests.csproj') --configuration Release
+    if ($LASTEXITCODE -ne 0) { throw 'Native damage source tests failed. No release was produced.' }
     $output = Join-Path $root 'bin/Release/net9.0'
     $dll = Join-Path $output 'BetterSpire2Lite.dll'
     $manifest = Join-Path $output 'BetterSpire2Lite.json'
@@ -72,7 +75,8 @@ try {
         throw 'Build outputs are missing.'
     }
     $json = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
-    if ($json.id -ne 'BetterSpire2Lite' -or -not $json.has_dll -or $json.has_pck) {
+    if ($json.id -ne 'BetterSpire2Lite' -or $json.version -ne '3.6.5-v113' -or
+        $json.min_game_version -ne '0.113.0' -or -not $json.has_dll -or $json.has_pck) {
         throw 'Unexpected mod manifest. No release was produced.'
     }
     New-Item -ItemType Directory -Path $destination -Force | Out-Null
@@ -80,9 +84,10 @@ try {
     Copy-Item -LiteralPath $manifest -Destination $destination
     @(
         ('Build timestamp: ' + (Get-Date -Format o)),
-        'C# core, overhead, journal, damage meter, performance, HUD, poison, game-boundary and native-journal, preview-isolation, native-hooks and v0.111 API/IL contract tests: passed. Mod compilation: passed.',
+        'C# core, overhead, journal, damage meter, performance, HUD, poison, game-boundary and native-journal, preview-isolation, native-hooks, v0.113 API/IL contract and native damage source tests: passed. Mod compilation: passed.',
         'In-game validation: NOT performed by this script.',
-        ('DLL SHA256: ' + (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash)
+        ('DLL SHA256: ' + (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash),
+        ('v113 sts2.dll reference SHA256: ' + (Get-FileHash -LiteralPath (Join-Path $root 'references/sts2.dll') -Algorithm SHA256).Hash)
     ) | Set-Content -LiteralPath (Join-Path $destination 'BUILD-SUCCESS.txt') -Encoding UTF8
     Write-Host ''
     Write-Host ('SUCCESS: ' + $destination)

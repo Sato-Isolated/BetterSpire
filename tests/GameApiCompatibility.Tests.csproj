@@ -8,5 +8,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="GameApiCompatibilityTests.cs" />
+    <Compile Include="GamePatchTargetContracts.cs" />
   </ItemGroup>
 </Project>

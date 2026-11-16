@@ -2,7 +2,7 @@
 
 A native C# / Godot mod for **Slay the Spire 2**, with incoming-damage forecasts, a compact teammate hand viewer, a combat journal, and a movable damage meter.
 
-The mod ID and output filenames remain `BetterSpire2Lite`. The current manifest version is `3.6.2-v111` and requires Slay the Spire 2 v0.111.0 or newer.
+The mod ID and output filenames remain `BetterSpire2Lite`. The current manifest version is `3.6.5-v113` and requires Slay the Spire 2 v0.113.0. This release targets the supplied v113 assemblies; v111 is no longer supported.
 
 ## Features
 
@@ -14,12 +14,28 @@ The mod ID and output filenames remain `BetterSpire2Lite`. The current manifest 
 
 Configure features and overlay placement through **F1**.
 
+### Damage accounting and details
+
+The meter counts enemy HP actually removed. Enable **Include enemy block** to also count absorbed damage; overkill remains a separate journal metric. Pet attacks count once for their owner. Poison and Doom use observed stack contributions to distribute damage between players; this is an attribution convention, not ownership supplied by the game.
+
+Enable **Current round in combat** in F1 to show the native round instead of the entire fight. Both the player and enemy phases belong to that round. The map still shows run totals. F5 provides player/team totals, source details and the damage timeline, including separate direct and convention-attributed damage. Older archives without attribution metadata remain readable and disclose unavailable details.
+
+Native result observation supplements history when ending combat suppresses a history entry. The two paths share result-identity deduplication. Lightning passives and evokes, Dark evokes, Thorns and Flame Barrier have distinct source labels. Missing observation patches mark the data partial and list the reason in F5; hiding the meter does not disable collection.
+
+### Forecast uncertainty
+
+Guardian simulates Thorns before the incoming hit and Flame Barrier after it, using the native conditions. Doom checks use the HP at the corresponding simulated phase. Unsupported death and resurrection reactions remain explicitly uncertain.
+
+Guardian keeps the last projected readout, such as `61 (11)`, visible throughout your turn, including card animations and recalculation. The numbers update when a fresh projection is ready. They disappear as soon as you end your turn, and return with a fresh projection on your next turn.
+
+Lightning end-of-turn targeting is explored without reading or advancing the game's random generator. Multiple possible outcomes display an HP range. Exploration is limited to 256 distinct states; reaching that limit produces a partial forecast rather than a claim that the sampled range covers every outcome. Forecasts do not contribute damage to the journal or meter.
+
 ## Keyboard shortcuts
 
 | Shortcut | Action |
 | --- | --- |
 | F1 | Open or close settings |
-| F2 | Toggle Guardian details when incoming-damage forecasts are enabled |
+| F8 | Toggle Guardian details when incoming-damage forecasts are enabled |
 | F3 | Toggle the HandViewer |
 | F4 | Toggle Guardian forecast visibility |
 | F5 | Open or close the combat journal |
@@ -27,7 +43,7 @@ Configure features and overlay placement through **F1**.
 | F7 | Toggle performance recording |
 | Page Up / Page Down | Switch players while the HandViewer is open and settings are closed |
 | Alt + Page Up / Page Down | Change pages in Guardian details |
-| Ctrl + F2 | Export the last forecast |
+| Ctrl + F8 | Export the last forecast |
 | Ctrl + F5 | Export the journal |
 | Ctrl + F7 | Export performance diagnostics |
 | Esc | Close an open mod panel, prioritizing settings, then HandViewer, journal, and Guardian details |
@@ -65,7 +81,7 @@ Or from a Bash environment with the SDK installed:
 bash build.sh
 ```
 
-Both scripts run ten C# behavior suites, compile the mod, and then verify the v0.111 metadata and IL call contracts. The game-boundary suite links the actual lifecycle, observer, victory resolver and turn-order source against test doubles; it does not run the game engine. Successful builds produce:
+Both scripts run ten C# behavior suites, compile the mod, and then verify the v0.113 API/IL contracts and damage-source provenance. The game-boundary suite links the actual lifecycle, observer, victory resolver and turn-order source against test doubles; it does not run the game engine. Successful builds produce:
 
 ```text
 dist/BetterSpire2Lite/
@@ -76,8 +92,12 @@ dist/BetterSpire2Lite/
 
 Build diagnostics are written to `build.log`. The scripts do not modify the game installation.
 
-### Native API integration (v0.111)
+### Native API integration (v0.113)
 
+- Damage observation targets the eight-argument async `Damage` overload accepting `DamageTargetData`, including direct native calls and pre-block redirection. Doom observation preserves the new card-source argument in native kill commands. Result identity still prevents double counting with history.
+- Judgement executions are observed at the native HP setter before death/revival reactions. F5/F6 count the HP actually removed for the card owner, without adding a gameplay history entry.
+- Pet HP labels use the native `MonsterModel.IsInteractable` rule. Guardian simulates Wuppy before owner block, then passes only overkill through block, Osty and the player's HP modifiers. Dead Wuppy is skipped on later hits; indirect damage and direct pet hits retain their native rules.
+- Runtime forecasts and metadata checks recognize the audited v113 module (`ad562b4e-7352-4ca2-ae45-0ff44cd284bc`). The source-linked HUD tests cover player/pet visibility; native contracts also verify the non-damage patch targets and private UI/map fields.
 - Combat setup and ready/undo notifications use native events. Guardian caches the event-provided combat state; a debug-state read is retained only for late initialization. Deferred native state notifications supplement immediate invalidation signals.
 - The early victory patch targets `EndCombatInternal(CombatTurnState)`, not its parameterless test wrapper. The journal still drains before native history is cleared; final combat events provide additional overlay/speed cleanup.
 - Forecast end-turn effects respect current extra-turn participants. Multi-target attacks are ordered by hit, then player. Unknown attack lifecycle hooks downgrade forecast confidence instead of executing gameplay callbacks.
@@ -116,7 +136,45 @@ To run only the HUD suite:
 dotnet run --project tests/Hud.Core.Tests.csproj --configuration Release
 ```
 
-The build scripts verify the behavior suites, v0.111 metadata contract, and mod compilation. These checks do not validate Godot rendering or actual game input. In-game verification remains necessary, particularly for overlay interactions, scaling, and compatibility with other mods.
+The build scripts verify the behavior suites, v0.113 metadata contract, and mod compilation. These checks do not validate Godot rendering or actual game input. In-game verification remains necessary, particularly for overlay interactions, scaling, and compatibility with other mods.
+
+## Historical releases (v111)
+
+The sections below describe the original v111 audits and behavior changes. Current v113 validation is described above.
+
+## Strangle and Doom accounting 3.6.4-v111
+
+F5 and F6 now include Strangle (Strangulation) and Doom (Trépas), including their
+last-enemy kills. Strangle uses its native per-applier power instance, not the owner
+of a card that happens to trigger it. Doom counts the HP actually removed by its
+execution, not the stacks applied. Shared Doom is allocated proportionally to
+observed stack contributions, using the same rounding convention as poison; missing
+provenance stays unattributed. F5 names both effects and discloses the convention.
+
+The observer captures the native HP-loss result before death reactions and journal
+sealing. Result identity prevents double counting when native history also records
+it. Native tasks, results, damage parameters, death prevention and game history are
+preserved; no synthetic gameplay event is added. Nested damage/kills and suspended
+callbacks from previous combats are isolated. Historical totals are not reconstructed.
+
+The native-journal suite applies the actual Harmony patches to game-boundary doubles
+and checks ordinary/lethal hits, shared stacks, unknown ownership, resurrection,
+multi-target execution, nested reactions and async replacement. Metadata checks
+verify the patched call sites against v0.111. In-game verification is still required.
+
+## Last-enemy crash fix 3.6.3-v111
+
+The native observer no longer queries `IsOverOrEnding` while providing or receiving
+combat hooks. In v0.111, killing the last primary enemy makes that property enumerate
+the same mod providers through `ShouldStopCombatFromEnding`, causing unbounded
+recursion and a process crash. Provider eligibility now uses combat identity and
+lifecycle flags only. Ending notifications are discarded by the heartbeat, outside
+the native hook stack; native death and enemy-spawn reactions retain their own votes.
+
+Regression tests reproduce this native call cycle with bounded recursion, including
+first-time observer creation after a kill and a reaction that prevents combat from
+ending. Metadata checks verify the cycle against the supplied v0.111 DLL. Actual
+solo and multiplayer victories still require in-game verification.
 
 ## Focused update 3.6.2-v111
 
@@ -204,7 +262,7 @@ change touches no Godot node properties. Forge/Replay notifications are observed
 
 Guardian separates value invalidation from structural reconciliation. Generic native
 notifications no longer unbind every model. New lifecycle reactions default to uncertain
-unless explicitly covered. Doom thresholds/chained death reactions, offensive/custom orbs,
+unless explicitly covered. Unsupported chained death reactions and custom orbs,
 Sly and other unsupported effects still produce partial forecasts. This update does not
 execute native kill/end-turn/RNG commands or claim to simulate every card interaction.
 Intent label updates use native `SetTextAutoSize`.
@@ -219,7 +277,7 @@ ready/undo and overlay scaling. Back up settings/journal before testing a new bu
 ## Repository layout
 
 - `BetterSpire2/` — mod implementation, feature modules, UI, and game patches.
-- `tests/` — ten C# behavior projects, the v0.111 API contract, and their JSON fixtures.
+- `tests/` — ten C# behavior projects, the v0.113 API/IL and damage-source contracts, and their JSON fixtures.
 - `references/` — assemblies used for compilation.
 - `build.cmd`, `build.ps1`, `build.sh` — test and packaging entry points.
 

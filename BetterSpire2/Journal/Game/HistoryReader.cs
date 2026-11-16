@@ -37,14 +37,21 @@ internal sealed class HistoryReader
         if (!_actorIds.TryGetValue(creature, out var id)) _actorIds[creature] = id = "actor:" + _actorIds.Count;
         return id;
     }
-    private ConditionalWeakTable<PoisonPower, PoisonStackPool> _poison = new();
+    private ConditionalWeakTable<PowerModel, PoisonStackPool> _stackPools = new();
+    private ConditionalWeakTable<DamageResult, object> _recordedDamage = new();
     internal void Reset()
     {
-        _cursor.Reset(); _actorIds.Clear(); _poison = new(); PoisonDamageObserver.Reset();
+        _cursor.Reset(); _actorIds.Clear(); _stackPools = new(); _recordedDamage = new(); PoisonDamageObserver.Reset();
     }
+    // A command may still be unwinding after the native end-of-combat clear.
+    // Preserve result identities and attribution pools, reset only the list cursor.
+    internal void HistoryCleared() => _cursor.Reset();
     internal PoisonDamageCredit CapturePoison(PoisonPower power) =>
-        _poison.GetValue(power, _ => new PoisonStackPool()).Capture(power.Amount);
-    internal void ForgetPoison(PoisonPower power) => _poison.Remove(power);
+        _stackPools.GetValue(power, _ => new PoisonStackPool()).Capture(power.Amount);
+    internal PoisonDamageCredit CaptureDoom(DoomPower power) =>
+        _stackPools.GetValue(power, _ => new PoisonStackPool()).Capture(power.Amount);
+    internal void ForgetPoison(PoisonPower power) => _stackPools.Remove(power);
+    internal void ForgetDoom(DoomPower power) => _stackPools.Remove(power);
     internal void Drain(CombatHistory history, JournalSession session)
     {
         // The supplied DLL returns its List<T> as IEnumerable<T>. Keep the indexed fast path.
@@ -83,13 +90,13 @@ internal sealed class HistoryReader
     {
         switch (entry)
         {
-            case PowerReceivedEntry e when e.Power is PoisonPower poison:
+            case PowerReceivedEntry e when e.Power is PoisonPower or DoomPower:
                 // Signed, native post-modifier delta. A rejected application has
                 // no positive delta; a natural decrement has a negative delta.
-                // Do not read power.Applier: stacked poison retains only one applier.
+                // Do not read power.Applier: shared stacks retain only one applier.
                 string? applier = PlayerId(e.Applier);
                 if (applier != null && session.Run?.Players.ContainsKey(applier) != true) applier = null;
-                _poison.GetValue(poison, _ => new PoisonStackPool()).ObserveChange(applier, e.Amount);
+                _stackPools.GetValue(e.Power, _ => new PoisonStackPool()).ObserveChange(applier, e.Amount);
                 break;
             case CardPlayFinishedEntry e:
                 Emit(session, e.Actor, round, phase, Stat.CardsPlayed, 1, e.CardPlay.Card); break;
@@ -105,39 +112,51 @@ internal sealed class HistoryReader
             case BlockGainedEntry e:
                 Emit(session, e.Receiver, round, phase, Stat.BlockGained, e.Amount, e.CardPlay?.Card, "effect:unknown"); break;
             case DamageReceivedEntry e:
-                // UnblockedDamage is actual HP removed, excluding OverkillDamage in this DLL.
-                Emit(session, e.Receiver, round, phase, e.Receiver.PetOwner != null ? Stat.PetHpLost : Stat.HpLost,
-                    e.Result.UnblockedDamage, e.CardSource, "effect:unknown");
-                // Pet attacks can consume the owner's block. That block is counted ONCE from history,
-                // not once again via DamageBlockInternal. Pet HP remains a separate metric.
-                Emit(session, e.Receiver, round, phase, Stat.DamageBlocked, e.Result.BlockedDamage);
-                Creature? dealer = Owner(e.Dealer) != null ? e.Dealer : e.CardSource?.Owner?.Creature;
-                string? dealerId = PlayerId(dealer);
-                bool eligible = e.Receiver.Side == CombatSide.Enemy &&
-                    (dealerId != null || e.Dealer == null || e.Dealer.Side != CombatSide.Enemy);
-                string sourceId = e.CardSource == null ? "effect:unknown" : "card:" + e.CardSource.Id.Entry + ":" + e.CardSource.Title;
-                string sourceName = e.CardSource?.Title ?? "";
-                var attribution = new DamageAttribution(DamageAttributionKind.NotCounted, Array.Empty<DamageShare>());
-                if (eligible)
-                {
-                    PoisonDamageObserver.TryGetCredit(e.Result, out var credit);
-                    attribution = DamageAccounting.Record(session, round, phase,
-                        e.Result.UnblockedDamage, e.Result.BlockedDamage, e.Result.OverkillDamage,
-                        dealerId, sourceId, sourceName, e.CardSource != null, e.Dealer?.PetOwner != null,
-                        Owner(e.Dealer) == null && dealerId != null, credit);
-                    if (attribution.Kind == DamageAttributionKind.PoisonConvention)
-                    { sourceId = "effect:poison"; sourceName = "Poison"; }
-                }
-                session.RecordDamageTrace(new DamageTraceEntry
-                {
-                    Round = round, Phase = phase, Dealer = e.Dealer?.Name ?? dealer?.Name ?? "",
-                    Target = e.Receiver.Name, TargetId = ActorId(e.Receiver),
-                    TargetPlayerId = PlayerId(e.Receiver) ?? "", SourceId = sourceId, Source = sourceName,
-                    Hp = e.Result.UnblockedDamage, Blocked = e.Result.BlockedDamage, Overkill = e.Result.OverkillDamage,
-                    Fatal = e.Result.WasTargetKilled, CountsForMeter = eligible, Attribution = attribution.Kind,
-                    Shares = attribution.Shares.ToArray()
-                });
+                RecordDamage(session, round, phase, e.Receiver, e.Dealer, e.Result, e.CardSource);
                 break;
         }
+    }
+
+    internal void RecordDamage(JournalSession session, int round, JournalPhase phase,
+        Creature receiver, Creature? nativeDealer, DamageResult result, CardModel? cardSource,
+        EffectDamageCredit? effect = null)
+    {
+        // Supplemental completed-result and Strangle/Doom observations can arrive
+        // before native history (which omits ending-combat hits and direct kills). The result identity is the
+        // shared deduplication key, never an amount, creature name or frame.
+        if (_recordedDamage.TryGetValue(result, out _)) return;
+        _recordedDamage.Add(result, new object());
+        // UnblockedDamage is actual HP removed, excluding OverkillDamage in this DLL.
+        Emit(session, receiver, round, phase, receiver.PetOwner != null ? Stat.PetHpLost : Stat.HpLost,
+            result.UnblockedDamage, cardSource, "effect:unknown");
+        // Pet attacks can consume the owner's block. That block is counted ONCE from history,
+        // not once again via DamageBlockInternal. Pet HP remains a separate metric.
+        Emit(session, receiver, round, phase, Stat.DamageBlocked, result.BlockedDamage);
+        Creature? dealer = Owner(nativeDealer) != null ? nativeDealer : cardSource?.Owner?.Creature;
+        string? dealerId = PlayerId(dealer);
+        bool eligible = receiver.Side == CombatSide.Enemy &&
+            (dealerId != null || nativeDealer == null || nativeDealer.Side != CombatSide.Enemy);
+        string sourceId = effect?.SourceId ?? (cardSource == null ? "effect:unknown" : "card:" + cardSource.Id.Entry + ":" + cardSource.Title);
+        string sourceName = effect?.SourceName ?? cardSource?.Title ?? "";
+        var attribution = new DamageAttribution(DamageAttributionKind.NotCounted, Array.Empty<DamageShare>());
+        if (eligible)
+        {
+            PoisonDamageObserver.TryGetCredit(result, out var credit);
+            attribution = DamageAccounting.Record(session, round, phase,
+                result.UnblockedDamage, result.BlockedDamage, result.OverkillDamage,
+                dealerId, sourceId, sourceName, cardSource != null, nativeDealer?.PetOwner != null,
+                Owner(nativeDealer) == null && dealerId != null, credit, effect);
+            if (attribution.Kind == DamageAttributionKind.PoisonConvention)
+            { sourceId = "effect:poison"; sourceName = "Poison"; }
+        }
+        session.RecordDamageTrace(new DamageTraceEntry
+        {
+            Round = round, Phase = phase, Dealer = nativeDealer?.Name ?? dealer?.Name ?? "",
+            Target = receiver.Name, TargetId = ActorId(receiver),
+            TargetPlayerId = PlayerId(receiver) ?? "", SourceId = sourceId, Source = sourceName,
+            Hp = result.UnblockedDamage, Blocked = result.BlockedDamage, Overkill = result.OverkillDamage,
+            Fatal = result.WasTargetKilled, CountsForMeter = eligible, Attribution = attribution.Kind,
+            Shares = attribution.Shares.ToArray()
+        });
     }
 }

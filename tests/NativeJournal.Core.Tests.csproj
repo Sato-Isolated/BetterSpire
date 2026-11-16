@@ -5,7 +5,23 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="NativeJournalTests.cs" />
+    <Compile Include="EffectDamageTests.cs" />
+    <Compile Include="EffectDamageDoubles.cs" />
+    <Compile Include="../BetterSpire2/Journal/Game/NativeDamageObserver.cs" Link="Game/NativeDamageObserver.cs" />
+    <Compile Include="../BetterSpire2/Journal/Game/JudgementDamageObserver.cs" Link="Game/JudgementDamageObserver.cs" />
+    <Compile Include="../BetterSpire2/Patches/Combat/JudgementDamagePatches.cs" Link="Patches/JudgementDamagePatches.cs" />
+    <Compile Include="../BetterSpire2/Journal/Game/DamageObservationCoverage.cs" Link="Game/DamageObservationCoverage.cs" />
+    <Compile Include="../BetterSpire2/Journal/Game/DamageSourceObserver.cs" Link="Game/DamageSourceObserver.cs" />
+    <Compile Include="../BetterSpire2/Patches/Combat/DamageSourcePatches.cs" Link="Patches/DamageSourcePatches.cs" />
+    <Compile Include="../BetterSpire2/Patches/Combat/NativeDamagePatches.cs" Link="Patches/NativeDamagePatches.cs" />
+    <Compile Include="../BetterSpire2/Journal/Game/EffectDamageObserver.cs" Link="Game/EffectDamageObserver.cs" />
+    <Compile Include="../BetterSpire2/Journal/Game/HistoryReader.cs" Link="Game/HistoryReader.cs" />
+    <Compile Include="../BetterSpire2/Patches/Combat/EffectDamagePatches.cs" Link="Patches/EffectDamagePatches.cs" />
+    <Compile Include="../BetterSpire2/Patches/Combat/PoisonNativeMethods.cs" Link="Patches/PoisonNativeMethods.cs" />
     <Compile Include="../BetterSpire2/Journal/Core/*.cs" Link="Journal/%(Filename)%(Extension)" />
     <Compile Include="../BetterSpire2/DamageMeter/Core/*.cs" Link="Meter/%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="0Harmony"><HintPath>../references/0Harmony.dll</HintPath></Reference>
   </ItemGroup>
 </Project>

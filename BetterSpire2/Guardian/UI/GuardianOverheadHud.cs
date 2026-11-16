@@ -15,7 +15,7 @@ using MegaCrit.Sts2.Core.Nodes.Screens.Overlays;
 namespace BetterSpire2.Guardian.UI;
 
 /// <summary>One lightweight label per actor, positioned every frame; no per-frame simulation.</summary>
-internal sealed class GuardianOverheadHud
+internal sealed partial class GuardianOverheadHud
 {
     private CanvasLayer? _layer;
     private Control? _root;
@@ -27,7 +27,10 @@ internal sealed class GuardianOverheadHud
     private readonly List<OverheadLabel> _ordered = new();
     private readonly List<HudRect> _obstacles = new();
     private int _generation;
-    private ulong _lastErrorLog;
+    private int _hiddenForSpace;
+    private ulong _lastErrorLog, _retryAfter;
+    internal Action<int>? HiddenReadoutCountChanged { get; set; }
+    internal int HiddenForSpace => _hiddenForSpace;
 
     internal void Render(ForecastResult result, IReadOnlyDictionary<Creature, string> actorIds)
     {
@@ -42,30 +45,34 @@ internal sealed class GuardianOverheadHud
             ActorForecast? actor = null;
             if (actorIds.TryGetValue(creature, out var id)) result.Actors.TryGetValue(id, out actor);
             // Only show a pet when it is actually projected to lose HP; never pretend its HP is the player's.
-            if (!creature.IsPlayer && (actor == null || actor.HpLost == 0)) continue;
-            if (actor != null && !OverheadPresentation.ShouldShow(actor, result.IsPartial, ModSettings.GuardianOnlyDanger)) continue;
-            Entry(node).Bind(node, actor, result.IsPartial, _generation, isLocal ? 0 : creature.IsPlayer ? 1 : 2);
+            if (!creature.IsPlayer && (actor == null ||
+                (actor.MaximumHpLost == 0 && result.BranchEnumerationComplete))) continue;
+            if (actor != null && !OverheadPresentation.ShouldShow(actor, result.IsPartial,
+                ModSettings.GuardianOnlyDanger, result.BranchEnumerationComplete)) continue;
+            Entry(node).Bind(node, actor, result.IsPartial, _generation,
+                isLocal ? 0 : creature.IsPlayer ? 1 : 2, result.BranchEnumerationComplete);
         }
         FinishSync();
     }
 
     internal void MarkStale()
     {
-        foreach (var label in _ordered) label.Invalidated = true;
+        foreach (var label in _ordered) label.Display.Invalidate();
     }
 
-    internal void RenderStatus()
+    internal bool RenderStatus(bool error = false)
     {
-        // Unavailable/resolving readouts intentionally contain no placeholder. Do not build hidden labels.
-        MarkStale();
-        Hide();
+        foreach (var label in _ordered) label.Display.SetStatus(error);
+        if (Valid(_root) && Valid(_room)) FinishSync();
+        return Valid(_tree);
     }
 
     internal void Hide()
     {
+        SetHiddenForSpace(0);
         if (Valid(_root)) _root!.Visible = false;
         if (Valid(_tree)) _tree!.ProcessFrame -= UpdatePositions;
-        _tree = null;
+        _tree = null; _retryAfter = 0;
     }
 
     internal void Clear()
@@ -124,26 +131,27 @@ internal sealed class GuardianOverheadHud
 
     private void UpdatePositions()
     {
+        ulong now = Time.GetTicksMsec();
+        if (now < _retryAfter) return;
+        _retryAfter = 0;
         try
         {
             using var measurement = PerformanceProbe.Measure(ProbeSection.OverheadPlacement);
             if (!Valid(_root) || !Valid(_room) || _room != NCombatRoom.Instance) { Clear(); return; }
             var manager = CombatManager.Instance;
             if (manager == null || !manager.IsInProgress || manager.IsOverOrEnding) { Clear(); return; }
+            var player = _local?.Player;
+            if (player == null || !GuardianTurnVisibility.ShouldShow(manager.IsStarting, manager.IsEnemyTurnStarted,
+                manager.EndingPlayerTurnPhaseOne || manager.EndingPlayerTurnPhaseTwo,
+                player.PlayerCombatState?.Phase == PlayerTurnPhase.Play,
+                manager.IsPartOfPlayerTurn(player), manager.IsPlayerReadyToEndTurn(player)))
+            { Clear(); return; }
             if (!_room!.IsVisibleInTree() || _room.Modulate.A <= .01f ||
-                !ModSettings.PlayerDamageTotal || SettingsMenu.IsVisible ||
+                !ModSettings.PlayerDamageTotal ||
                 NCapstoneContainer.Instance?.InUse == true || NOverlayStack.Instance?.ScreenCount > 0 ||
                 NGame.Instance?.FeedbackScreen?.Visible == true)
-            { _root!.Visible = false; return; }
+            { SetHiddenForSpace(0); _root!.Visible = false; return; }
             _root!.Visible = true;
-            bool changed = IsResolving(manager);
-            foreach (var label in _ordered)
-            {
-                if (!Valid(label.CreatureNode) || !Valid(label.TextNode)) continue;
-                if (!label.MatchesSnapshot()) changed = true;
-            }
-            // Once invalidated, never revive old numbers when an animation ends; await a fresh capture.
-            if (changed) foreach (var label in _ordered) label.Invalidated = true;
             var viewport = _root.GetViewport();
             var visible = viewport.GetVisibleRect();
             var bounds = new HudRect(visible.Position.X, visible.Position.Y, visible.Size.X, visible.Size.Y);
@@ -151,53 +159,42 @@ internal sealed class GuardianOverheadHud
             foreach (var label in _ordered)
                 if (Valid(label.CreatureNode) && OverheadAnchor.TryIntentRect(label.CreatureNode, out var intent))
                     _obstacles.Add(intent);
+            int hiddenForSpace = 0;
             foreach (var label in _ordered)
             {
-                if (!Valid(label.TextNode)) continue;
-                var readout = label.Invalidated
-                    ? new OverheadReadout(OverheadPresentation.Resolving, OverheadSeverity.Normal)
-                    : label.Readout;
-                // No placeholder for unavailable data and no invisible collision rectangle.
-                // A later valid capture restores the readout through the normal render path.
-                if (string.IsNullOrEmpty(readout.Text))
-                { label.TextNode.Visible = false; continue; }
+                if (!Valid(label.TextNode) || !Valid(label.CreatureNode)) continue;
+                if (!ShouldTrack(label.CreatureNode.Entity)) { label.TextNode.Visible = false; continue; }
+                var readout = label.Display.Read();
                 if (!OverheadAnchor.TryHead(label.CreatureNode, viewport, out var head))
                 { label.TextNode.Visible = false; continue; }
                 label.Apply(readout.Text, readout.Severity);
                 var placement = OverheadLayout.Place(head.X, head.Y, label.Size.X, label.Size.Y,
                     ModSettings.GuardianOverheadOffsetX, ModSettings.GuardianOverheadGap, bounds, _obstacles);
                 label.TextNode.Visible = placement.HasValue;
-                if (placement is not { } rect) continue;
+                if (placement is not { } rect) { hiddenForSpace++; continue; }
                 var position = new Vector2(rect.X, rect.Y);
                 if (label.TextNode.Position != position) label.TextNode.Position = position;
                 _obstacles.Add(rect);
             }
+            SetHiddenForSpace(hiddenForSpace);
         }
         catch (Exception ex)
         {
-            Hide(); // No frame callback may escape into the game's update loop.
-            ulong now = Time.GetTicksMsec();
+            // Keep the frame callback attached so a transient layout error can recover without
+            // waiting for another combat event to render the Guardian HUD.
+            if (Valid(_root)) _root!.Visible = false;
+            SetHiddenForSpace(0);
+            _retryAfter = now + 1000;
             if (_lastErrorLog == 0 || now - _lastErrorLog > 10000)
             { _lastErrorLog = now; ModLog.Error("Guardian.Overhead", ex); }
         }
     }
 
-    private bool IsResolving(CombatManager manager)
+    private void SetHiddenForSpace(int count)
     {
-        if (manager.IsStarting || manager.IsEnemyTurnStarted || manager.EndingPlayerTurnPhaseOne ||
-            manager.EndingPlayerTurnPhaseTwo || manager.PlayerActionsDisabled) return true;
-        var player = _local?.Player;
-        return player != null && (player.PlayerCombatState?.Phase != PlayerTurnPhase.Play ||
-            manager.IsPlayerReadyToEndTurn(player));
-    }
-
-    private static bool ShouldTrack(Creature creature)
-    {
-        if (creature == null || creature.IsDead) return false;
-        if (creature.IsPlayer) return ModSettings.GuardianShowTeammates || LocalContext.IsMe(creature);
-        return ModSettings.GuardianShowPets && creature.PetOwner is { } owner && creature.MaxHp > 0 &&
-            creature.Monster?.IsHealthBarVisible != false &&
-            (ModSettings.GuardianShowTeammates || LocalContext.IsMe(owner.Creature));
+        if (_hiddenForSpace == count) return;
+        _hiddenForSpace = count;
+        HiddenReadoutCountChanged?.Invoke(count);
     }
 
     private static bool Valid(GodotObject? value) => OverheadAnchor.Valid(value);

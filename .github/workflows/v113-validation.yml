@@ -1,4 +1,4 @@
-name: v111 validation
+name: v113 validation
 on:
   push:
     branches: [main]
@@ -28,14 +28,17 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./build.ps1
+      - name: CustomChallenges behavior and native metadata contracts
+        shell: pwsh
+        run: ./CustomChallenges/build.ps1
       - name: Record source revision and source archive
         shell: bash
         run: |
           git rev-parse HEAD >> dist/BetterSpire2Lite/BUILD-SUCCESS.txt
-          git archive --format=zip --output=BetterSpire-sources.zip HEAD BetterSpire2 tests BetterSpire2Lite.csproj build.sh build.ps1 build.cmd README.md global.json NuGet.Config Properties .github/workflows/v111-validation.yml
+          git archive --format=zip --output=BetterSpire-sources.zip HEAD BetterSpire2 CustomChallenges tests BetterSpire2Lite.csproj build.sh build.ps1 build.cmd README.md global.json NuGet.Config Properties .github/workflows/v113-validation.yml
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: BetterSpire-v111-${{ runner.os }}
+          name: BetterSpire-v113-${{ runner.os }}
           path: dist/BetterSpire2Lite/
           if-no-files-found: error
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -43,4 +46,9 @@ jobs:
         with:
           name: BetterSpire-sources
           path: BetterSpire-sources.zip
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: CustomChallenges-v113-${{ runner.os }}
+          path: CustomChallenges/dist/CustomChallenges-1.3.2.zip
           if-no-files-found: error

@@ -63,8 +63,11 @@ internal static class NativeCombatHooks
     private static bool IsLive(CombatState state, CombatManager? manager) =>
         manager != null && manager.CurrentCombatId != null &&
         ReferenceEquals(CombatLifecycle.CurrentState, state) &&
-        // v111 IsOverOrEnding can be true during setup; setup is a native exception.
-        (manager.IsStarting || (manager.IsInProgress && !manager.IsOverOrEnding));
+        // Only read lifecycle flags here. After the last primary enemy dies,
+        // IsOverOrEnding -> ShouldStopCombatFromEnding enumerates this provider.
+        // Querying it from Provide, eligibility or Notify would overflow the stack.
+        // The native dispatcher owns victory filtering; the heartbeat gates delivery.
+        (manager.IsStarting || manager.IsInProgress);
 
     internal static bool IsActive(BetterSpireCombatObserver observer) =>
         _enabled && !_faulted && ReferenceEquals(observer, _current) &&
@@ -96,7 +99,10 @@ internal static class NativeCombatHooks
         foreach (Action<CombatState> handler in handlers.GetInvocationList())
         {
             // A consumer may end/reset the combat; do not notify the next one for it.
-            if (!IsActive(observer)) break;
+            // This runs outside native hook dispatch. Keep the observer available
+            // for the victory predicate itself, but discard ending UI notifications.
+            if (!IsActive(observer) || (!CombatManager.Instance.IsStarting &&
+                CombatManager.Instance.IsOverOrEnding)) break;
             try { handler(state); }
             catch (Exception ex) { ModLog.Error("NativeHooks.Consumer", ex); }
         }
